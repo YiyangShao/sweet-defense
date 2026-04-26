@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>甜点防御 — Sweet Defense</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --cream: #FFF4E6;
+  --cream-2: #FFEAD0;
+  --cream-3: #FBDDB7;
+  --pink: #FFB5C5;
+  --pink-deep: #F58CA6;
+  --peach: #FFD9A0;
+  --peach-deep: #F5B872;
+  --mint: #C4E4D4;
+  --mint-deep: #8FCFAE;
+  --lavender: #D9C5E8;
+  --lavender-deep: #B79CD1;
+  --butter: #F8E8B0;
+  --butter-deep: #E8CE6E;
+  --berry: #E08FB4;
+  --choco: #B68A6E;
+  --ink: #5A3E36;
+  --ink-soft: #8B6F5C;
+  --ink-faint: #B89A87;
+  --shadow-soft: 0 6px 16px rgba(180, 110, 80, 0.18);
+  --shadow-card: 0 8px 24px rgba(180, 110, 80, 0.12), 0 2px 6px rgba(180, 110, 80, 0.08);
+  --shadow-deep: 0 14px 40px rgba(180, 110, 80, 0.22);
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 40px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: 'Nunito', 'Noto Sans SC', system-ui, sans-serif;
+  color: var(--ink);
+  background: #F5EBDD;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+#root { width: 100%; height: 100%; }
+.font-display { font-family: 'Fredoka', 'Noto Sans SC', sans-serif; font-weight: 600; letter-spacing: 0.01em; }
+.sprinkle-bg {
+  background-color: var(--cream);
+  background-image:
+    radial-gradient(circle at 20% 20%, var(--pink) 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 40%, var(--mint) 2px, transparent 2.5px),
+    radial-gradient(circle at 40% 75%, var(--butter) 2px, transparent 2.5px),
+    radial-gradient(circle at 85% 80%, var(--lavender) 2px, transparent 2.5px),
+    radial-gradient(circle at 10% 65%, var(--peach) 2px, transparent 2.5px);
+  background-size: 120px 120px, 140px 140px, 110px 110px, 160px 160px, 130px 130px;
+  background-position: 0 0, 30px 50px, 60px 20px, 10px 70px, 80px 40px;
+}
+.bubble-btn {
+  font-family: 'Fredoka', 'Noto Sans SC', sans-serif;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 28px;
+  cursor: pointer;
+  background: white;
+  color: var(--ink);
+  box-shadow: 0 4px 0 rgba(180, 110, 80, 0.15), var(--shadow-soft);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.bubble-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(180, 110, 80, 0.15), var(--shadow-card); }
+.bubble-btn:active { transform: translateY(1px); }
+.bubble-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.bubble-btn.primary {
+  background: linear-gradient(180deg, var(--pink) 0%, var(--pink-deep) 100%);
+  color: white;
+  box-shadow: 0 4px 0 var(--pink-deep), 0 8px 18px rgba(245, 140, 166, 0.4);
+}
+.bubble-btn.mint {
+  background: linear-gradient(180deg, var(--mint) 0%, var(--mint-deep) 100%);
+  color: white;
+  box-shadow: 0 4px 0 var(--mint-deep), 0 8px 18px rgba(143, 207, 174, 0.4);
+}
+.cute-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  border: 2px solid rgba(255, 234, 208, 0.8);
+}
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+  border: 2px solid var(--cream-2);
+}
+@keyframes wobble { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+.wobble { animation: wobble 3s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.floaty { animation: float 4s ease-in-out infinite; }
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.pop { animation: pop 0.18s ease-out; }
+.shop-card { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.shop-card:hover:not(.disabled) { transform: translateY(-3px); }
+.shop-card.disabled { opacity: 0.55; cursor: not-allowed; filter: saturate(0.6); }
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(40, 28, 24, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+@keyframes modalIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.modal-in { animation: modalIn 0.22s cubic-bezier(.2,.9,.4,1.2); }
+.scene { position: absolute; inset: 0; }
+.full { width: 100%; height: 100%; }
+@keyframes floatUp {
+  0% { transform: translate(-50%, 0); opacity: 1; }
+  100% { transform: translate(-50%, -34px); opacity: 0; }
+}
+@keyframes prepPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.prep-pulse { animation: prepPulse 1s ease-in-out infinite; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useCallback, memo, Fragment } = React;
+
+// ============================================================
+// ART — desserts, animals, icons (verbatim from design spec)
+// ============================================================
+const Cupcake = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="28" ry="5" fill="rgba(90,62,54,0.18)" />
+    <path d="M 26 60 L 30 88 Q 30 92 34 92 L 66 92 Q 70 92 70 88 L 74 60 Z" fill="#F5B872"/>
+    <rect x="36" y="62" width="3" height="28" rx="1.5" fill="#E89A4D" opacity="0.6"/>
+    <rect x="48" y="62" width="3" height="28" rx="1.5" fill="#E89A4D" opacity="0.6"/>
+    <rect x="60" y="62" width="3" height="28" rx="1.5" fill="#E89A4D" opacity="0.6"/>
+    <ellipse cx="50" cy="58" rx="26" ry="10" fill="#FFB5C5"/>
+    <ellipse cx="50" cy="48" rx="20" ry="9" fill="#FFC8D4"/>
+    <ellipse cx="50" cy="38" rx="14" ry="7" fill="#FFD9E0"/>
+    <circle cx="50" cy="30" r="6" fill="#FFE5EC"/>
+    <circle cx="50" cy="22" r="5" fill="#E85A7A"/>
+    <ellipse cx="48" cy="20" rx="1.5" ry="1" fill="#FFB5C5"/>
+    <rect x="38" y="50" width="4" height="2" rx="1" fill="#7BC4A0" transform="rotate(30 40 51)"/>
+    <rect x="58" y="44" width="4" height="2" rx="1" fill="#F8E060" transform="rotate(-20 60 45)"/>
+    <rect x="46" y="56" width="4" height="2" rx="1" fill="#B79CD1" transform="rotate(50 48 57)"/>
+  </svg>
+));
+
+const Donut = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="32" ry="5" fill="rgba(90,62,54,0.18)"/>
+    <ellipse cx="50" cy="60" rx="38" ry="28" fill="#D4A373"/>
+    <ellipse cx="50" cy="58" rx="38" ry="28" fill="#E0B589"/>
+    <path d="M 14 55 Q 12 38 30 32 Q 50 26 70 32 Q 88 38 86 55 Q 86 50 80 50 Q 70 48 50 50 Q 30 48 20 50 Q 14 50 14 55 Z" fill="#F58CA6"/>
+    <ellipse cx="50" cy="58" rx="14" ry="10" fill="#E0B589"/>
+    <ellipse cx="50" cy="56" rx="14" ry="10" fill="#FFEAD0"/>
+    <rect x="28" y="40" width="5" height="2.5" rx="1.2" fill="#7BC4A0" transform="rotate(-30 30 41)"/>
+    <rect x="42" y="36" width="5" height="2.5" rx="1.2" fill="#F8E060" transform="rotate(20 44 37)"/>
+    <rect x="58" y="38" width="5" height="2.5" rx="1.2" fill="#B79CD1" transform="rotate(-40 60 39)"/>
+    <rect x="70" y="46" width="5" height="2.5" rx="1.2" fill="#7BC4F0" transform="rotate(60 72 47)"/>
+    <rect x="22" y="50" width="5" height="2.5" rx="1.2" fill="#F8E060" transform="rotate(15 24 51)"/>
+    <rect x="74" y="60" width="5" height="2.5" rx="1.2" fill="#7BC4A0" transform="rotate(-60 76 61)"/>
+  </svg>
+));
+
+const Macaron = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="28" ry="4" fill="rgba(90,62,54,0.18)"/>
+    <ellipse cx="50" cy="72" rx="32" ry="11" fill="#C4E4D4"/>
+    <ellipse cx="50" cy="70" rx="32" ry="11" fill="#A8D9C0"/>
+    <circle cx="22" cy="70" r="3" fill="#A8D9C0"/>
+    <circle cx="30" cy="74" r="3" fill="#A8D9C0"/>
+    <circle cx="40" cy="76" r="3" fill="#A8D9C0"/>
+    <circle cx="50" cy="77" r="3" fill="#A8D9C0"/>
+    <circle cx="60" cy="76" r="3" fill="#A8D9C0"/>
+    <circle cx="70" cy="74" r="3" fill="#A8D9C0"/>
+    <circle cx="78" cy="70" r="3" fill="#A8D9C0"/>
+    <ellipse cx="50" cy="58" rx="30" ry="6" fill="#FFB5C5"/>
+    <ellipse cx="50" cy="46" rx="32" ry="11" fill="#C4E4D4"/>
+    <ellipse cx="50" cy="44" rx="32" ry="11" fill="#D4ECDD"/>
+    <circle cx="22" cy="48" r="3" fill="#A8D9C0"/>
+    <circle cx="30" cy="51" r="3" fill="#A8D9C0"/>
+    <circle cx="40" cy="53" r="3" fill="#A8D9C0"/>
+    <circle cx="50" cy="54" r="3" fill="#A8D9C0"/>
+    <circle cx="60" cy="53" r="3" fill="#A8D9C0"/>
+    <circle cx="70" cy="51" r="3" fill="#A8D9C0"/>
+    <circle cx="78" cy="48" r="3" fill="#A8D9C0"/>
+    <ellipse cx="40" cy="38" rx="6" ry="2" fill="white" opacity="0.6"/>
+  </svg>
+));
+
+const IceCream = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="93" rx="22" ry="4" fill="rgba(90,62,54,0.18)"/>
+    <path d="M 35 60 L 50 92 L 65 60 Z" fill="#E0B589"/>
+    <line x1="40" y1="64" x2="46" y2="80" stroke="#B68A6E" strokeWidth="1.5"/>
+    <line x1="50" y1="64" x2="50" y2="86" stroke="#B68A6E" strokeWidth="1.5"/>
+    <line x1="60" y1="64" x2="54" y2="80" stroke="#B68A6E" strokeWidth="1.5"/>
+    <line x1="38" y1="68" x2="62" y2="68" stroke="#B68A6E" strokeWidth="1.2"/>
+    <line x1="42" y1="76" x2="58" y2="76" stroke="#B68A6E" strokeWidth="1.2"/>
+    <circle cx="50" cy="55" r="22" fill="#A8D9C0"/>
+    <circle cx="42" cy="50" r="2" fill="#7BB89A"/>
+    <circle cx="55" cy="58" r="2" fill="#7BB89A"/>
+    <circle cx="60" cy="48" r="2" fill="#7BB89A"/>
+    <circle cx="50" cy="33" r="18" fill="#E5D5F0"/>
+    <ellipse cx="42" cy="25" rx="6" ry="3" fill="white" opacity="0.6"/>
+    <rect x="44" y="20" width="4" height="2" rx="1" fill="#F58CA6"/>
+    <rect x="52" y="18" width="4" height="2" rx="1" fill="#F8E060"/>
+  </svg>
+));
+
+const Lollipop = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="93" rx="14" ry="3" fill="rgba(90,62,54,0.18)"/>
+    <rect x="48" y="48" width="4" height="44" rx="2" fill="white" stroke="#E0CFB7" strokeWidth="1"/>
+    <circle cx="50" cy="38" r="28" fill="#FFB5C5"/>
+    <path d="M 50 38 m -20 0 a 20 20 0 1 1 40 0 a 14 14 0 1 1 -28 0 a 8 8 0 1 1 16 0 a 4 4 0 1 1 -8 0"
+          fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+    <ellipse cx="40" cy="28" rx="6" ry="3" fill="white" opacity="0.7"/>
+    <ellipse cx="50" cy="62" rx="6" ry="3" fill="#FFE5EC"/>
+  </svg>
+));
+
+const Cookie = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="28" ry="5" fill="rgba(90,62,54,0.18)"/>
+    <circle cx="50" cy="53" r="32" fill="#D9B47C"/>
+    <circle cx="22" cy="50" r="4" fill="#D9B47C"/>
+    <circle cx="78" cy="50" r="4" fill="#D9B47C"/>
+    <circle cx="30" cy="78" r="4" fill="#D9B47C"/>
+    <circle cx="70" cy="78" r="4" fill="#D9B47C"/>
+    <circle cx="35" cy="26" r="4" fill="#D9B47C"/>
+    <circle cx="68" cy="26" r="4" fill="#D9B47C"/>
+    <ellipse cx="40" cy="42" rx="5" ry="4" fill="#5A3E36"/>
+    <ellipse cx="58" cy="48" rx="6" ry="5" fill="#5A3E36"/>
+    <ellipse cx="38" cy="60" rx="4" ry="3.5" fill="#5A3E36"/>
+    <ellipse cx="60" cy="66" rx="5" ry="4" fill="#5A3E36"/>
+    <ellipse cx="50" cy="72" rx="3.5" ry="3" fill="#5A3E36"/>
+    <ellipse cx="32" cy="50" rx="3" ry="2.5" fill="#5A3E36"/>
+    <ellipse cx="68" cy="58" rx="3" ry="2.5" fill="#5A3E36"/>
+    <ellipse cx="38" cy="36" rx="6" ry="2" fill="white" opacity="0.4"/>
+  </svg>
+));
+
+const Cake = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="93" rx="34" ry="5" fill="rgba(90,62,54,0.18)"/>
+    <rect x="14" y="58" width="72" height="28" rx="6" fill="#FFE5EC"/>
+    <path d="M 14 66 Q 22 70 30 66 Q 38 72 46 66 Q 54 72 62 66 Q 70 70 78 66 Q 86 72 86 66 L 86 60 L 14 60 Z" fill="#F58CA6"/>
+    <rect x="22" y="40" width="56" height="22" rx="6" fill="#D4ECDD"/>
+    <path d="M 22 46 Q 30 50 38 46 Q 46 52 54 46 Q 62 52 70 46 Q 78 50 78 46 L 78 42 L 22 42 Z" fill="#8FCFAE"/>
+    <rect x="32" y="26" width="36" height="18" rx="5" fill="#FFF1C4"/>
+    <rect x="48" y="14" width="4" height="14" rx="1" fill="#F58CA6"/>
+    <rect x="48" y="14" width="4" height="14" rx="1" fill="white" opacity="0.3"/>
+    <ellipse cx="50" cy="10" rx="2.5" ry="4" fill="#FFB857"/>
+    <ellipse cx="50" cy="9" rx="1.5" ry="2.5" fill="#FFE066"/>
+  </svg>
+));
+
+const ChocoFountain = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="93" rx="32" ry="5" fill="rgba(90,62,54,0.18)"/>
+    <ellipse cx="50" cy="80" rx="32" ry="8" fill="#7A4F3F"/>
+    <path d="M 18 80 Q 18 88 50 90 Q 82 88 82 80 L 80 70 Q 50 76 20 70 Z" fill="#8B6F5C"/>
+    <ellipse cx="50" cy="70" rx="30" ry="6" fill="#7A4F3F"/>
+    <rect x="44" y="36" width="12" height="36" rx="2" fill="#8B6F5C"/>
+    <ellipse cx="50" cy="34" rx="14" ry="4" fill="#7A4F3F"/>
+    <path d="M 36 36 Q 32 44 36 52 Q 30 50 34 60" stroke="#5A3E36" strokeWidth="3" fill="none" strokeLinecap="round"/>
+    <path d="M 64 36 Q 68 44 64 52 Q 70 50 66 60" stroke="#5A3E36" strokeWidth="3" fill="none" strokeLinecap="round"/>
+    <circle cx="50" cy="20" r="8" fill="#7A4F3F"/>
+    <circle cx="50" cy="14" r="3" fill="#E85A7A"/>
+  </svg>
+));
+
+const Mouse = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="22" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <ellipse cx="50" cy="62" rx="26" ry="22" fill="#C9C0D4"/>
+    <circle cx="50" cy="40" r="20" fill="#D4CCDD"/>
+    <circle cx="34" cy="26" r="9" fill="#D4CCDD"/>
+    <circle cx="66" cy="26" r="9" fill="#D4CCDD"/>
+    <circle cx="34" cy="26" r="5" fill="#FFB5C5"/>
+    <circle cx="66" cy="26" r="5" fill="#FFB5C5"/>
+    <circle cx="42" cy="40" r="2.5" fill="#3A2A26"/>
+    <circle cx="58" cy="40" r="2.5" fill="#3A2A26"/>
+    <circle cx="42.5" cy="39" r="0.8" fill="white"/>
+    <circle cx="58.5" cy="39" r="0.8" fill="white"/>
+    <circle cx="36" cy="46" r="3" fill="#FFB5C5" opacity="0.6"/>
+    <circle cx="64" cy="46" r="3" fill="#FFB5C5" opacity="0.6"/>
+    <ellipse cx="50" cy="46" rx="2" ry="1.5" fill="#F58CA6"/>
+    <path d="M 47 50 Q 50 52 53 50" stroke="#5A3E36" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+    <path d="M 72 70 Q 88 64 84 50" stroke="#D4CCDD" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+  </svg>
+));
+
+const Hedgehog = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="86" rx="26" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <ellipse cx="55" cy="58" rx="34" ry="26" fill="#8B6F5C"/>
+    {[
+      [38, 38, -45], [48, 32, -20], [60, 30, 0], [72, 34, 20], [82, 44, 40],
+      [86, 58, 60], [40, 50, -55], [54, 44, -10], [68, 44, 15], [80, 56, 35],
+      [44, 64, -70], [58, 60, -5], [72, 58, 20], [50, 74, -85], [64, 72, 5],
+    ].map(([x, y, r], i) => (
+      <path key={i} d={`M ${x} ${y} L ${x+4} ${y-12} L ${x+8} ${y}`} fill="#A98467" transform={`rotate(${r} ${x+4} ${y-6})`}/>
+    ))}
+    <ellipse cx="28" cy="58" rx="14" ry="13" fill="#F5DEB3"/>
+    <circle cx="26" cy="56" r="2.5" fill="#3A2A26"/>
+    <circle cx="26.5" cy="55" r="0.8" fill="white"/>
+    <circle cx="22" cy="62" r="2.5" fill="#FFB5C5" opacity="0.7"/>
+    <circle cx="16" cy="58" r="2.5" fill="#3A2A26"/>
+    <ellipse cx="40" cy="80" rx="5" ry="3" fill="#8B6F5C"/>
+    <ellipse cx="68" cy="82" rx="5" ry="3" fill="#8B6F5C"/>
+  </svg>
+));
+
+const Rabbit = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="90" rx="22" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <ellipse cx="50" cy="68" rx="22" ry="20" fill="#FFEAD0"/>
+    <ellipse cx="38" cy="86" rx="8" ry="4" fill="#FFEAD0"/>
+    <ellipse cx="62" cy="86" rx="8" ry="4" fill="#FFEAD0"/>
+    <circle cx="38" cy="86" r="2" fill="#FFB5C5"/>
+    <circle cx="62" cy="86" r="2" fill="#FFB5C5"/>
+    <circle cx="50" cy="46" r="20" fill="#FFF1DC"/>
+    <ellipse cx="40" cy="20" rx="6" ry="16" fill="#FFEAD0"/>
+    <ellipse cx="60" cy="20" rx="6" ry="16" fill="#FFEAD0"/>
+    <ellipse cx="40" cy="22" rx="3" ry="10" fill="#FFB5C5"/>
+    <ellipse cx="60" cy="22" rx="3" ry="10" fill="#FFB5C5"/>
+    <circle cx="42" cy="44" r="2.5" fill="#3A2A26"/>
+    <circle cx="58" cy="44" r="2.5" fill="#3A2A26"/>
+    <circle cx="42.5" cy="43" r="0.8" fill="white"/>
+    <circle cx="58.5" cy="43" r="0.8" fill="white"/>
+    <circle cx="36" cy="50" r="3" fill="#FFB5C5" opacity="0.7"/>
+    <circle cx="64" cy="50" r="3" fill="#FFB5C5" opacity="0.7"/>
+    <ellipse cx="50" cy="52" rx="2" ry="1.5" fill="#F58CA6"/>
+    <path d="M 50 54 L 50 56 M 47 58 Q 50 60 53 58" stroke="#5A3E36" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+    <circle cx="74" cy="74" r="6" fill="white"/>
+  </svg>
+));
+
+const Squirrel = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="22" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <path d="M 70 70 Q 92 60 88 38 Q 86 22 72 22 Q 80 32 78 50 Q 76 64 70 70 Z" fill="#C9924D"/>
+    <ellipse cx="50" cy="62" rx="20" ry="22" fill="#D4A373"/>
+    <ellipse cx="48" cy="68" rx="10" ry="12" fill="#FFEAD0"/>
+    <circle cx="48" cy="38" r="18" fill="#D4A373"/>
+    <path d="M 36 24 L 32 14 L 42 22 Z" fill="#D4A373"/>
+    <path d="M 60 24 L 64 14 L 54 22 Z" fill="#D4A373"/>
+    <path d="M 36 24 L 34 18 L 40 22 Z" fill="#FFB5C5"/>
+    <path d="M 60 24 L 62 18 L 56 22 Z" fill="#FFB5C5"/>
+    <circle cx="40" cy="38" r="2.8" fill="#3A2A26"/>
+    <circle cx="56" cy="38" r="2.8" fill="#3A2A26"/>
+    <circle cx="40.5" cy="37" r="0.9" fill="white"/>
+    <circle cx="56.5" cy="37" r="0.9" fill="white"/>
+    <circle cx="34" cy="46" r="5" fill="#E89A4D" opacity="0.5"/>
+    <circle cx="62" cy="46" r="5" fill="#E89A4D" opacity="0.5"/>
+    <ellipse cx="48" cy="44" rx="2" ry="1.5" fill="#3A2A26"/>
+    <rect x="46.5" y="46" width="1.5" height="3" fill="white"/>
+    <rect x="48" y="46" width="1.5" height="3" fill="white"/>
+  </svg>
+));
+
+const Raccoon = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="24" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <ellipse cx="50" cy="64" rx="24" ry="22" fill="#9CA3B5"/>
+    <circle cx="50" cy="40" r="22" fill="#B3B9C9"/>
+    <circle cx="32" cy="22" r="8" fill="#9CA3B5"/>
+    <circle cx="68" cy="22" r="8" fill="#9CA3B5"/>
+    <circle cx="32" cy="22" r="4" fill="#7A8090"/>
+    <circle cx="68" cy="22" r="4" fill="#7A8090"/>
+    <ellipse cx="50" cy="40" rx="20" ry="8" fill="#5A3E36"/>
+    <ellipse cx="40" cy="40" rx="3" ry="3" fill="white"/>
+    <ellipse cx="60" cy="40" rx="3" ry="3" fill="white"/>
+    <circle cx="40" cy="40" r="1.5" fill="#3A2A26"/>
+    <circle cx="60" cy="40" r="1.5" fill="#3A2A26"/>
+    <ellipse cx="50" cy="52" rx="2.5" ry="2" fill="#3A2A26"/>
+    <circle cx="34" cy="54" r="3" fill="#FFB5C5" opacity="0.5"/>
+    <circle cx="66" cy="54" r="3" fill="#FFB5C5" opacity="0.5"/>
+    <ellipse cx="76" cy="68" rx="6" ry="14" fill="#9CA3B5" transform="rotate(30 76 68)"/>
+    <ellipse cx="80" cy="60" rx="5" ry="3" fill="#5A3E36" transform="rotate(30 80 60)"/>
+    <ellipse cx="76" cy="74" rx="5" ry="3" fill="#5A3E36" transform="rotate(30 76 74)"/>
+  </svg>
+));
+
+const Pigeon = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="90" rx="20" ry="3" fill="rgba(90,62,54,0.15)"/>
+    <ellipse cx="50" cy="58" rx="22" ry="26" fill="#B3C5D9"/>
+    <ellipse cx="48" cy="62" rx="12" ry="16" fill="#D4DEE8"/>
+    <circle cx="50" cy="32" r="14" fill="#9CB0C9"/>
+    <circle cx="56" cy="30" r="2.5" fill="#3A2A26"/>
+    <circle cx="56.5" cy="29" r="0.8" fill="white"/>
+    <path d="M 64 32 L 72 32 L 64 36 Z" fill="#F5B872"/>
+    <ellipse cx="30" cy="50" rx="8" ry="20" fill="#9CB0C9" transform="rotate(-20 30 50)"/>
+    <ellipse cx="70" cy="50" rx="8" ry="20" fill="#9CB0C9" transform="rotate(20 70 50)"/>
+    <ellipse cx="28" cy="48" rx="5" ry="14" fill="#7A8FA8" transform="rotate(-20 28 48)"/>
+    <ellipse cx="72" cy="48" rx="5" ry="14" fill="#7A8FA8" transform="rotate(20 72 48)"/>
+    <ellipse cx="50" cy="42" rx="10" ry="4" fill="#B79CD1" opacity="0.6"/>
+    <line x1="44" y1="80" x2="44" y2="86" stroke="#F58CA6" strokeWidth="2"/>
+    <line x1="56" y1="80" x2="56" y2="86" stroke="#F58CA6" strokeWidth="2"/>
+  </svg>
+));
+
+const Fox = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="22" ry="4" fill="rgba(90,62,54,0.2)"/>
+    <path d="M 72 68 Q 92 64 90 44 Q 86 32 76 36 Q 82 46 80 56 Q 78 64 72 68 Z" fill="#E8956D"/>
+    <path d="M 86 44 Q 90 46 88 52" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round"/>
+    <ellipse cx="50" cy="62" rx="22" ry="20" fill="#E8956D"/>
+    <ellipse cx="48" cy="68" rx="10" ry="10" fill="white"/>
+    <circle cx="48" cy="38" r="20" fill="#E8956D"/>
+    <ellipse cx="48" cy="46" rx="10" ry="6" fill="white"/>
+    <path d="M 30 22 L 26 8 L 40 22 Z" fill="#E8956D"/>
+    <path d="M 66 22 L 70 8 L 56 22 Z" fill="#E8956D"/>
+    <path d="M 32 20 L 30 14 L 38 22 Z" fill="#3A2A26"/>
+    <path d="M 64 20 L 66 14 L 58 22 Z" fill="#3A2A26"/>
+    <ellipse cx="40" cy="36" rx="3" ry="2" fill="#3A2A26"/>
+    <ellipse cx="56" cy="36" rx="3" ry="2" fill="#3A2A26"/>
+    <circle cx="32" cy="44" r="3" fill="#FFB5C5" opacity="0.6"/>
+    <circle cx="64" cy="44" r="3" fill="#FFB5C5" opacity="0.6"/>
+    <ellipse cx="48" cy="44" rx="2.5" ry="2" fill="#3A2A26"/>
+    <path d="M 48 48 Q 44 52 42 50 M 48 48 Q 52 52 54 50" stroke="#5A3E36" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+  </svg>
+));
+
+const Bear = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="32" ry="5" fill="rgba(90,62,54,0.22)"/>
+    <ellipse cx="50" cy="66" rx="32" ry="26" fill="#A87553"/>
+    <ellipse cx="48" cy="72" rx="16" ry="16" fill="#E8C9A8"/>
+    <circle cx="50" cy="38" r="26" fill="#A87553"/>
+    <circle cx="28" cy="20" r="9" fill="#A87553"/>
+    <circle cx="72" cy="20" r="9" fill="#A87553"/>
+    <circle cx="28" cy="20" r="5" fill="#E8C9A8"/>
+    <circle cx="72" cy="20" r="5" fill="#E8C9A8"/>
+    <ellipse cx="50" cy="46" rx="14" ry="10" fill="#E8C9A8"/>
+    <circle cx="40" cy="36" r="3" fill="#3A2A26"/>
+    <circle cx="60" cy="36" r="3" fill="#3A2A26"/>
+    <circle cx="40.5" cy="35" r="1" fill="white"/>
+    <circle cx="60.5" cy="35" r="1" fill="white"/>
+    <ellipse cx="50" cy="42" rx="3.5" ry="2.5" fill="#3A2A26"/>
+    <path d="M 50 46 L 50 50 M 46 52 Q 50 54 54 52" stroke="#5A3E36" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+    <circle cx="32" cy="46" r="4" fill="#FFB5C5" opacity="0.5"/>
+    <circle cx="68" cy="46" r="4" fill="#FFB5C5" opacity="0.5"/>
+    <ellipse cx="32" cy="84" rx="8" ry="5" fill="#8B5E3C"/>
+    <ellipse cx="68" cy="84" rx="8" ry="5" fill="#8B5E3C"/>
+    <path d="M 36 14 L 40 4 L 44 12 L 50 2 L 56 12 L 60 4 L 64 14 Z" fill="#F8E060" stroke="#E8CE6E" strokeWidth="1"/>
+    <circle cx="50" cy="10" r="2" fill="#F58CA6"/>
+  </svg>
+));
+
+const Heart = memo(({ size = 24, fill = "#F58CA6" }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size}>
+    <path d="M12 21 C 6 16 2 12 2 8 A 5 5 0 0 1 12 6 A 5 5 0 0 1 22 8 C 22 12 18 16 12 21 Z" fill={fill}/>
+    <ellipse cx="8" cy="8" rx="2" ry="1.2" fill="white" opacity="0.5"/>
+  </svg>
+));
+
+const Sugar = memo(({ size = 24 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size}>
+    <circle cx="12" cy="11" r="10" fill="#FFD9A0"/>
+    <circle cx="12" cy="12" r="6" fill="#F5B872" opacity="0.4"/>
+    <text x="12" y="16" textAnchor="middle" fontSize="9" fontWeight="800" fill="#8B5E3C" fontFamily="Fredoka, sans-serif">糖</text>
+  </svg>
+));
+
+const Star = memo(({ size = 24, filled = true }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size}>
+    <path d="M 12 2 L 14.5 9 L 22 9 L 16 13.5 L 18.5 21 L 12 16.5 L 5.5 21 L 8 13.5 L 2 9 L 9.5 9 Z"
+          fill={filled ? "#F8E060" : "#E5DCC5"}
+          stroke={filled ? "#E8CE6E" : "#C9BFA5"}
+          strokeWidth="1.5" strokeLinejoin="round"/>
+  </svg>
+));
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const T = 80;
+const COLS = 16, ROWS = 9;
+const W = COLS * T, H = ROWS * T;
+
+const PATH_GRID = [
+  [0,1],[1,1],[2,1],[3,1],[3,2],[3,3],[3,4],
+  [4,4],[5,4],[6,4],[6,3],[6,2],[7,2],[8,2],
+  [9,2],[9,3],[9,4],[9,5],[9,6],[10,6],[11,6],
+  [12,6],[12,5],[12,4],[13,4],[14,4],[15,4],
+];
+const PATH_SET = new Set(PATH_GRID.map(([x,y]) => `${x},${y}`));
+const isPathCell = (gx, gy) => PATH_SET.has(`${gx},${gy}`);
+
+const PATH = (() => {
+  const points = PATH_GRID.map(([gx,gy]) => ({x: gx*T + T/2, y: gy*T + T/2}));
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) {
+    cum.push(cum[i-1] + Math.hypot(points[i].x - points[i-1].x, points[i].y - points[i-1].y));
+  }
+  return { points, cum, total: cum[cum.length-1] };
+})();
+
+function posAt(dist) {
+  if (dist <= 0) return { ...PATH.points[0] };
+  if (dist >= PATH.total) return { ...PATH.points[PATH.points.length-1] };
+  let lo = 0, hi = PATH.cum.length - 1;
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (PATH.cum[mid] <= dist) lo = mid; else hi = mid;
+  }
+  const segLen = PATH.cum[lo+1] - PATH.cum[lo];
+  const t = (dist - PATH.cum[lo]) / segLen;
+  const a = PATH.points[lo], b = PATH.points[lo+1];
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
+
+const TOWER_DEFS = {
+  cupcake:  { Comp: Cupcake,       cost: 50,  dmg: 8,  range: 2.0, cd: 0.22, name: '杯子蛋糕',     role: '快速射击', desc: '糖珠扫射，对小怪极有效',     proj: '#FFB5C5' },
+  macaron:  { Comp: Macaron,       cost: 80,  dmg: 26, range: 3.8, cd: 1.10, name: '马卡龙',       role: '远程狙击', desc: '远距精准重击',                proj: '#B79CD1' },
+  donut:    { Comp: Donut,         cost: 100, dmg: 14, range: 1.9, cd: 1.00, splash: 1.2, name: '甜甜圈', role: '环形伤害', desc: '糖霜爆炸，溅射群伤', proj: '#F58CA6' },
+  icecream: { Comp: IceCream,      cost: 120, dmg: 4,  range: 2.2, cd: 0.60, slow: { factor: 0.5, duration: 1.6 }, name: '冰淇淋', role: '冰冻减速', desc: '降低敌人速度', proj: '#A8D9C0' },
+  lollipop: { Comp: Lollipop,      cost: 90,  dmg: 6,  range: 2.0, cd: 0.85, stun: 0.9, name: '棒棒糖',  role: '眩晕控制', desc: '短暂定身敌人',                proj: '#FFE5EC' },
+  cookie:   { Comp: Cookie,        cost: 30,  dmg: 6,  range: 1.7, cd: 0.95, name: '曲奇饼',       role: '基础便宜', desc: '入门首选，性价比高',          proj: '#D9B47C' },
+  choco:    { Comp: ChocoFountain, cost: 200, dmg: 9,  range: 2.0, cd: 0.18, name: '巧克力喷泉',   role: '持续伤害', desc: '高频微伤喷射',                proj: '#5A3E36' },
+  cake:     { Comp: Cake,          cost: 350, dmg: 50, range: 2.6, cd: 1.40, splash: 0.9, name: '蛋糕', role: 'Boss 塔', desc: '重型轰击，AOE 巨伤',         proj: '#F8E060' },
+};
+const TOWER_ORDER = ['cupcake','macaron','donut','icecream','lollipop','cookie','choco','cake'];
+
+const ENEMY_DEFS = {
+  mouse:    { Comp: Mouse,    hp: 22,  speed: 1.4, reward: 8,  name: '糖糖鼠',   damage: 1 },
+  rabbit:   { Comp: Rabbit,   hp: 16,  speed: 2.0, reward: 10, name: '跳跳兔',   damage: 1 },
+  hedgehog: { Comp: Hedgehog, hp: 90,  speed: 0.7, reward: 18, name: '刺刺球',   damage: 2 },
+  squirrel: { Comp: Squirrel, hp: 30,  speed: 1.3, reward: 12, name: '抢糖松鼠', damage: 1, steal: 6 },
+  raccoon:  { Comp: Raccoon,  hp: 38,  speed: 1.2, reward: 14, name: '夜行浣熊', damage: 1 },
+  pigeon:   { Comp: Pigeon,   hp: 22,  speed: 1.7, reward: 12, name: '云端鸽',   damage: 1 },
+  fox:      { Comp: Fox,      hp: 42,  speed: 1.4, reward: 16, name: '狡狐',     damage: 1, dodge: 0.22 },
+  bear:     { Comp: Bear,     hp: 360, speed: 0.55,reward: 100,name: '蜜熊王',   damage: 5, boss: true },
+};
+
+// 5-wave campaign
+const WAVES = [
+  [ { type: 'mouse', count: 8, interval: 0.85, delay: 0 } ],
+  [ { type: 'mouse', count: 6, interval: 0.70, delay: 0 },
+    { type: 'rabbit', count: 4, interval: 1.00, delay: 6 } ],
+  [ { type: 'mouse', count: 6, interval: 0.55, delay: 0 },
+    { type: 'hedgehog', count: 3, interval: 2.40, delay: 4 },
+    { type: 'squirrel', count: 2, interval: 1.40, delay: 9 } ],
+  [ { type: 'mouse', count: 8, interval: 0.45, delay: 0 },
+    { type: 'rabbit', count: 5, interval: 0.80, delay: 4 },
+    { type: 'fox', count: 3, interval: 1.50, delay: 9 },
+    { type: 'raccoon', count: 2, interval: 1.20, delay: 14 } ],
+  [ { type: 'mouse', count: 10, interval: 0.45, delay: 0 },
+    { type: 'rabbit', count: 6, interval: 0.70, delay: 4 },
+    { type: 'hedgehog', count: 3, interval: 2.20, delay: 8 },
+    { type: 'fox', count: 4, interval: 1.20, delay: 12 },
+    { type: 'bear', count: 1, interval: 1, delay: 16 } ],
+];
+
+const PREP_DURATION = 5; // seconds between waves
+
+// ============================================================
+// WORLD — mutable game state, updated by `update(world, dt)`
+// ============================================================
+function initWorld() {
+  return {
+    hp: 20,
+    sugar: 250,
+    waveIdx: 0,
+    waveState: 'preparing', // preparing | spawning | active | cleared
+    waveTimer: -PREP_DURATION,
+    spawnQueue: [],
+    speed: 1,         // 0 paused, 1 normal, 2 fast
+    enemies: [],
+    towers: [],
+    projectiles: [],
+    floats: [],       // damage popups
+    selectedTowerType: null,
+    selectedPlacedTower: null,
+    nextId: 1,
+    enemiesKilled: 0,
+    sugarEarned: 0,
+    elapsed: 0,
+    finished: null,   // null | 'win' | 'lose'
+  };
+}
+
+function startWave(w, idx) {
+  const wave = WAVES[idx];
+  const queue = [];
+  for (const group of wave) {
+    for (let i = 0; i < group.count; i++) {
+      queue.push({ type: group.type, t: (group.delay || 0) + i * group.interval });
+    }
+  }
+  queue.sort((a,b) => a.t - b.t);
+  w.spawnQueue = queue;
+  w.waveState = 'spawning';
+  w.waveTimer = 0;
+}
+
+function towerStats(tw) {
+  const def = TOWER_DEFS[tw.type];
+  const lvl = tw.level;
+  const dmgMul = lvl === 1 ? 1 : lvl === 2 ? 1.5 : 2.25;
+  const rangeMul = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
+  const cdMul = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
+  return {
+    dmg: def.dmg * dmgMul,
+    range: def.range * rangeMul,
+    cd: def.cd * cdMul,
+    splash: def.splash,
+    slow: def.slow,
+    stun: def.stun,
+    proj: def.proj,
+  };
+}
+
+function upgradeCost(tw) {
+  const base = TOWER_DEFS[tw.type].cost;
+  if (tw.level === 1) return Math.round(base * 1.4);
+  if (tw.level === 2) return Math.round(base * 2.2);
+  return null;
+}
+
+function sellRefund(tw) {
+  return Math.round(tw.invested * 0.5);
+}
+
+function applyDamage(w, enemy, dmg, opts) {
+  const def = ENEMY_DEFS[enemy.type];
+  const ep = posAt(enemy.dist);
+  if (def.dodge && Math.random() < def.dodge) {
+    w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 22, text: '闪避', color: '#B79CD1', t: 0 });
+    return;
+  }
+  enemy.hp -= dmg;
+  enemy.flash = 0.13;
+  w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: `-${Math.round(dmg)}`, color: '#E85A7A', t: 0 });
+  if (opts && opts.slow && !def.boss) {
+    enemy.slowUntil = w.elapsed + opts.slow.duration;
+    enemy.slowFactor = opts.slow.factor;
+  }
+  if (opts && opts.stun && !def.boss) {
+    enemy.stunUntil = w.elapsed + opts.stun;
+  }
+}
+
+function update(w, rawDt) {
+  if (w.finished) return;
+  if (w.speed === 0) return;
+  const dt = rawDt * w.speed;
+  w.elapsed += dt;
+  w.waveTimer += dt;
+
+  // Wave preparing → spawning
+  if (w.waveState === 'preparing' && w.waveTimer >= 0) {
+    startWave(w, w.waveIdx);
+  }
+
+  // Spawn enemies whose time has come
+  if (w.waveState === 'spawning') {
+    while (w.spawnQueue.length && w.spawnQueue[0].t <= w.waveTimer) {
+      const spawn = w.spawnQueue.shift();
+      const def = ENEMY_DEFS[spawn.type];
+      w.enemies.push({
+        id: w.nextId++,
+        type: spawn.type,
+        dist: 0,
+        hp: def.hp,
+        maxHp: def.hp,
+        baseSpeed: def.speed,
+        slowUntil: 0, slowFactor: 1,
+        stunUntil: 0,
+        flash: 0,
+        dead: false,
+      });
+    }
+    if (!w.spawnQueue.length) w.waveState = 'active';
+  }
+
+  // Move enemies
+  for (const e of w.enemies) {
+    if (e.dead || e.hp <= 0) continue;
+    const slow = w.elapsed < e.slowUntil ? e.slowFactor : 1;
+    const stunned = w.elapsed < e.stunUntil;
+    if (!stunned) {
+      e.dist += e.baseSpeed * T * slow * dt;
+    }
+    if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
+    if (e.dist >= PATH.total) {
+      const def = ENEMY_DEFS[e.type];
+      w.hp -= def.damage;
+      if (def.steal) w.sugar = Math.max(0, w.sugar - def.steal);
+      e.dead = true; e.reachedCastle = true;
+      if (w.hp <= 0) { w.hp = 0; w.finished = 'lose'; }
+    }
+  }
+
+  // Towers fire
+  for (const tw of w.towers) {
+    const stats = towerStats(tw);
+    tw.cooldown = Math.max(0, (tw.cooldown || 0) - dt);
+    if (tw.shootPulse > 0) tw.shootPulse = Math.max(0, tw.shootPulse - dt);
+    if (tw.cooldown > 0) continue;
+
+    const tx = tw.gx*T + T/2, ty = tw.gy*T + T/2;
+    const rangePx = stats.range * T;
+    let best = null, bestProgress = -1;
+    for (const e of w.enemies) {
+      if (e.dead || e.hp <= 0) continue;
+      const ep = posAt(e.dist);
+      const d = Math.hypot(ep.x - tx, ep.y - ty);
+      if (d <= rangePx && e.dist > bestProgress) {
+        best = e; bestProgress = e.dist;
+      }
+    }
+    if (best) {
+      const ep = posAt(best.dist);
+      w.projectiles.push({
+        id: w.nextId++,
+        fromX: tx, fromY: ty,
+        toX: ep.x, toY: ep.y,
+        targetId: best.id,
+        t: 0,
+        duration: tw.type === 'macaron' ? 0.14 : tw.type === 'cake' ? 0.20 : 0.16,
+        color: stats.proj,
+        size: tw.type === 'cake' ? 9 : tw.type === 'donut' ? 8 : 6,
+        dmg: stats.dmg,
+        splash: stats.splash,
+        slow: stats.slow,
+        stun: stats.stun,
+      });
+      tw.cooldown = stats.cd;
+      tw.shootPulse = 0.18;
+    }
+  }
+
+  // Update projectiles
+  for (const p of w.projectiles) {
+    p.t += dt / p.duration;
+    if (p.t >= 1) {
+      const target = w.enemies.find(e => e.id === p.targetId);
+      let hitX = p.toX, hitY = p.toY;
+      if (target && !target.dead) {
+        const ep = posAt(target.dist);
+        hitX = ep.x; hitY = ep.y;
+        applyDamage(w, target, p.dmg, p);
+      }
+      if (p.splash) {
+        const r = p.splash * T;
+        for (const e of w.enemies) {
+          if (e.dead || e.hp <= 0) continue;
+          if (target && e.id === target.id) continue;
+          const ep = posAt(e.dist);
+          const d = Math.hypot(ep.x - hitX, ep.y - hitY);
+          if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
+        }
+      }
+      p.dead = true;
+    }
+  }
+  w.projectiles = w.projectiles.filter(p => !p.dead);
+
+  // Reward kills
+  for (const e of w.enemies) {
+    if (e.hp <= 0 && !e.dead) {
+      e.dead = true;
+      if (!e.reachedCastle) {
+        const def = ENEMY_DEFS[e.type];
+        w.sugar += def.reward;
+        w.sugarEarned += def.reward;
+        w.enemiesKilled += 1;
+      }
+    }
+  }
+  w.enemies = w.enemies.filter(e => !e.dead);
+
+  // Float popups age out
+  for (const f of w.floats) f.t += dt;
+  w.floats = w.floats.filter(f => f.t < 0.7);
+
+  // Wave cleared?
+  if (w.waveState === 'active' && w.spawnQueue.length === 0 && w.enemies.length === 0) {
+    if (w.waveIdx + 1 >= WAVES.length) {
+      w.finished = 'win';
+    } else {
+      w.waveIdx += 1;
+      w.waveState = 'preparing';
+      w.waveTimer = -PREP_DURATION;
+      w.sugar += 25; // wave clear bonus
+      w.sugarEarned += 25;
+    }
+  }
+}
+
+// ============================================================
+// HUD
+// ============================================================
+function HUD({ world, onPause, onSpeed, onMenu, onEarlyStart }) {
+  const wave = world.waveIdx + 1;
+  const time = (() => {
+    const s = Math.floor(world.elapsed);
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  })();
+  const preparing = world.waveState === 'preparing';
+  const prepLeft = preparing ? Math.max(0, -world.waveTimer) : 0;
+
+  return (
+    <div style={{position:'absolute', top:0, left:0, right:0, padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:14, pointerEvents:'none', zIndex:5}}>
+      <div style={{display:'flex', gap:10, alignItems:'center', pointerEvents:'auto'}}>
+        <div className="stat-pill"><Heart size={20}/><span style={{fontSize:18}}>{world.hp}</span></div>
+        <div className="stat-pill"><Sugar size={20}/><span style={{fontSize:18}}>{world.sugar}</span></div>
+        <button className="bubble-btn" style={{padding:'8px 14px', fontSize:13, pointerEvents:'auto'}} onClick={onMenu}>← 主菜单</button>
+      </div>
+
+      <div className="cute-card font-display" style={{padding:'10px 22px', display:'flex', alignItems:'center', gap:14, borderRadius:999, pointerEvents:'auto'}}>
+        <span style={{fontSize:14, color:'var(--ink-soft)'}}>第</span>
+        <span style={{fontSize:24, color:'var(--berry)'}}>{wave}</span>
+        <span style={{fontSize:14, color:'var(--ink-soft)'}}>/ {WAVES.length} 波</span>
+        <div style={{width:1, height:20, background:'var(--cream-3)'}}/>
+        <span style={{fontSize:16}}>⏱ {time}</span>
+        {preparing && wave <= WAVES.length && (
+          <Fragment>
+            <div style={{width:1, height:20, background:'var(--cream-3)'}}/>
+            <span style={{fontSize:14, color:'var(--pink-deep)'}}>⏳ {prepLeft.toFixed(1)}s</span>
+          </Fragment>
+        )}
+      </div>
+
+      <div style={{display:'flex', gap:8, pointerEvents:'auto'}}>
+        <button className="bubble-btn" style={{padding:'10px 14px', fontSize:14}} onClick={onPause}>{world.speed === 0 ? '▶' : '⏸'}</button>
+        <button className={`bubble-btn ${world.speed === 2 ? 'mint' : ''}`} style={{padding:'10px 14px', fontSize:14}} onClick={onSpeed}>{world.speed === 2 ? '▶▶ 加速中' : '▶▶ 加速'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Wave preview card
+// ============================================================
+function WavePreview({ world, onEarlyStart }) {
+  const nextIdx = world.waveState === 'preparing' ? world.waveIdx : world.waveIdx + 1;
+  if (nextIdx >= WAVES.length) return null;
+  const wave = WAVES[nextIdx];
+  const counts = {};
+  for (const g of wave) counts[g.type] = (counts[g.type] || 0) + g.count;
+  const types = Object.keys(counts).slice(0, 4);
+  return (
+    <div className="cute-card" style={{position:'absolute', top:84, right:18, padding:12, minWidth:210, zIndex:6}}>
+      <div className="font-display" style={{fontSize:13, color:'var(--ink-soft)', marginBottom:8, letterSpacing:'0.1em'}}>
+        下一波 ▸ #{nextIdx + 1}
+      </div>
+      <div style={{display:'flex', gap:8, alignItems:'flex-end', justifyContent:'space-around', flexWrap:'wrap'}}>
+        {types.map(t => {
+          const Comp = ENEMY_DEFS[t].Comp;
+          return (
+            <div key={t} style={{textAlign:'center'}}>
+              <Comp size={38}/>
+              <div style={{fontSize:12, fontWeight:700, marginTop:-2}}>×{counts[t]}</div>
+            </div>
+          );
+        })}
+      </div>
+      {world.waveState === 'preparing' && (
+        <button className="bubble-btn primary prep-pulse" style={{width:'100%', marginTop:10, padding:'8px 12px', fontSize:13}} onClick={onEarlyStart}>
+          ▶ 提前开始 +5
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Tower Shop (bottom shelf)
+// ============================================================
+function TowerShop({ selected, sugar, onSelect }) {
+  return (
+    <div className="cute-card" style={{position:'absolute', left:16, right:16, bottom:14, padding:12, display:'flex', gap:10, alignItems:'center', zIndex:6}}>
+      <div className="font-display" style={{writingMode:'vertical-rl', fontSize:13, color:'var(--ink-soft)', padding:'4px 6px', letterSpacing:'0.2em'}}>甜点商店</div>
+      <div style={{display:'flex', gap:8, flex:1}}>
+        {TOWER_ORDER.map(type => {
+          const def = TOWER_DEFS[type];
+          const Comp = def.Comp;
+          const canAfford = sugar >= def.cost;
+          const isSelected = selected === type;
+          return (
+            <div
+              key={type}
+              className={`shop-card ${!canAfford ? 'disabled' : ''}`}
+              onClick={() => canAfford && onSelect(type)}
+              style={{
+                flex:1,
+                background: isSelected ? 'linear-gradient(180deg, #FFE5EC, #FFD9E0)' : 'var(--cream)',
+                border: isSelected ? '2px solid var(--pink-deep)' : '2px solid var(--cream-2)',
+                borderRadius:14, padding:8, textAlign:'center',
+                cursor: canAfford ? 'pointer' : 'not-allowed', position:'relative'
+              }}
+            >
+              <div style={{height:54, display:'flex', justifyContent:'center', alignItems:'flex-end'}}>
+                <Comp size={50}/>
+              </div>
+              <div className="font-display" style={{fontSize:13, marginTop:2}}>{def.name}</div>
+              <div style={{fontSize:10.5, color:'var(--ink-soft)', marginBottom:3, height:14}}>{def.desc}</div>
+              <div style={{display:'inline-flex', alignItems:'center', gap:4, background:'white', borderRadius:999, padding:'2px 8px', fontSize:12, fontWeight:700, color: canAfford ? 'var(--ink)' : '#C0928A'}}>
+                <Sugar size={13}/> {def.cost}
+              </div>
+              {isSelected && (
+                <div style={{position:'absolute', top:-7, right:-7, background:'var(--pink-deep)', color:'white', borderRadius:999, padding:'2px 8px', fontSize:10, fontWeight:700}}>已选</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Tower Detail / Upgrade modal
+// ============================================================
+function TowerDetailModal({ tower, sugar, onUpgrade, onSell, onClose }) {
+  const def = TOWER_DEFS[tower.type];
+  const stats = towerStats(tower);
+  const Comp = def.Comp;
+  const upCost = upgradeCost(tower);
+  const refund = sellRefund(tower);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="cute-card modal-in" style={{width:'min(520px, 92%)', padding:24, position:'relative'}} onClick={e => e.stopPropagation()}>
+        <div onClick={onClose} style={{position:'absolute', top:10, right:14, fontSize:22, color:'var(--ink-faint)', cursor:'pointer'}}>×</div>
+        <div style={{display:'flex', gap:18, alignItems:'center', marginBottom:18}}>
+          <div style={{
+            width:120, height:120,
+            background:'linear-gradient(180deg, #FFE5EC 0%, #FFD9E0 100%)',
+            borderRadius:22, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
+          }}>
+            <div className="floaty"><Comp size={100}/></div>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11, letterSpacing:'0.15em', color:'var(--ink-soft)'}}>{def.role.toUpperCase()}</div>
+            <h3 className="font-display" style={{fontSize:26, marginTop:2}}>
+              {def.name} <span style={{fontSize:13, color:'var(--pink-deep)'}}>{'★'.repeat(tower.level)}{'☆'.repeat(3 - tower.level)}</span>
+            </h3>
+            <p style={{fontSize:13, color:'var(--ink-soft)', marginTop:4, lineHeight:1.5}}>{def.desc}</p>
+          </div>
+        </div>
+
+        <div style={{display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8, marginBottom:18}}>
+          {[
+            { k:'攻击力', v: stats.dmg.toFixed(0), pct: Math.min(1, stats.dmg/60),  c:'var(--pink-deep)' },
+            { k:'射速',  v: (1/stats.cd).toFixed(1)+'/s', pct: Math.min(1, (1/stats.cd)/5), c:'var(--peach-deep)' },
+            { k:'射程',  v: stats.range.toFixed(1)+'格',  pct: Math.min(1, stats.range/4),  c:'var(--mint-deep)' },
+            { k:'累计花费', v: tower.invested.toString(), pct: Math.min(1, tower.invested/700), c:'var(--lavender-deep)' },
+          ].map((s, i) => (
+            <div key={i} style={{background:'var(--cream)', borderRadius:12, padding:'10px 14px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6}}>
+                <span style={{color:'var(--ink-soft)'}}>{s.k}</span>
+                <span style={{fontWeight:700}}>{s.v}</span>
+              </div>
+              <div style={{height:6, background:'white', borderRadius:3, overflow:'hidden'}}>
+                <div style={{width:`${s.pct*100}%`, height:'100%', background:s.c, borderRadius:3, transition:'width .2s'}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{display:'flex', gap:10}}>
+          {upCost !== null ? (
+            <button className="bubble-btn primary" disabled={sugar < upCost} style={{flex:2, padding:'14px', fontSize:15}} onClick={onUpgrade}>
+              ⬆ 升级到 {tower.level + 1} 星
+              <span style={{display:'inline-flex', alignItems:'center', gap:4, marginLeft:8, background:'rgba(255,255,255,0.3)', padding:'2px 8px', borderRadius:999, fontSize:13}}>
+                <Sugar size={13}/>{upCost}
+              </span>
+            </button>
+          ) : (
+            <div style={{flex:2, padding:'14px', fontSize:14, textAlign:'center', color:'var(--ink-soft)', background:'var(--cream)', borderRadius:999}}>已满级 ★★★</div>
+          )}
+          <button className="bubble-btn" style={{flex:1, padding:'14px', fontSize:14, color:'var(--ink-soft)'}} onClick={onSell}>
+            💰 出售 +{refund}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Game Board — the SVG scene
+// ============================================================
+function GameBoard({ world, hover, ghost, onCellClick, onCellRightClick, onTowerClick, onMouseMove, onMouseLeave, svgRef }) {
+  const enemyEls = world.enemies.map(e => {
+    const ep = posAt(e.dist);
+    const def = ENEMY_DEFS[e.type];
+    const Comp = def.Comp;
+    const size = def.boss ? T * 1.2 : T * 0.78;
+    const hpPct = e.hp / e.maxHp;
+    const hpW = def.boss ? 70 : 44;
+    return (
+      <g key={e.id} transform={`translate(${ep.x} ${ep.y})`} style={{filter: e.flash > 0 ? 'brightness(1.5) saturate(0.6)' : undefined}}>
+        <g transform={`translate(${-size/2} ${-size/2})`}>
+          <Comp size={size}/>
+        </g>
+        <g transform={`translate(${-hpW/2} ${-size/2 - 12})`}>
+          <rect x="0" y="0" width={hpW} height="7" rx="3.5" fill="white" stroke="#E5DCC5" strokeWidth="1"/>
+          <rect x="2" y="2" width={(hpW-4) * hpPct} height="3" rx="1.5"
+                fill={hpPct > 0.5 ? "#8FCFAE" : hpPct > 0.25 ? "#F8E060" : "#F58CA6"}/>
+        </g>
+        {e.slowUntil > world.elapsed && (
+          <circle cx="0" cy={size/2 - 8} r={size/2 - 4} fill="rgba(168,217,192,0.25)" stroke="#A8D9C0" strokeWidth="2" strokeDasharray="3 3"/>
+        )}
+        {e.stunUntil > world.elapsed && (
+          <text x="0" y={-size/2 - 18} textAnchor="middle" fontSize="20">⭐</text>
+        )}
+      </g>
+    );
+  });
+
+  const towerEls = world.towers.map(tw => {
+    const def = TOWER_DEFS[tw.type];
+    const Comp = def.Comp;
+    const cx = tw.gx*T + T/2, cy = tw.gy*T + T/2;
+    const sz = T * (tw.shootPulse > 0 ? 1.04 : 1.0);
+    const isSelected = world.selectedPlacedTower === tw.id;
+    return (
+      <g key={tw.id} style={{cursor:'pointer'}} onClick={(e) => { e.stopPropagation(); onTowerClick(tw.id); }}>
+        <ellipse cx={cx} cy={cy+8} rx={T*0.42} ry={T*0.18} fill="rgba(90,62,54,0.12)"/>
+        <circle cx={cx} cy={cy} r={T*0.42} fill={isSelected ? 'rgba(255, 234, 208, 0.95)' : 'white'} opacity={isSelected ? 1 : 0.5} stroke={isSelected ? 'var(--pink-deep)' : 'transparent'} strokeWidth="3"/>
+        <g transform={`translate(${cx - sz/2} ${cy - sz/2 - 4})`}>
+          <Comp size={sz}/>
+        </g>
+        {tw.level > 1 && (
+          <g transform={`translate(${cx + T*0.22} ${cy - T*0.22})`}>
+            <circle r="11" fill="white" stroke="#F58CA6" strokeWidth="2"/>
+            <text x="0" y="3.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#F58CA6" fontFamily="Fredoka, sans-serif">{tw.level}</text>
+          </g>
+        )}
+      </g>
+    );
+  });
+
+  const projectileEls = world.projectiles.map(p => {
+    const x = p.fromX + (p.toX - p.fromX) * p.t;
+    const y = p.fromY + (p.toY - p.fromY) * p.t;
+    return (
+      <g key={p.id}>
+        <line x1={p.fromX} y1={p.fromY} x2={x} y2={y} stroke={p.color} strokeWidth="2" strokeDasharray="3 3" opacity="0.4"/>
+        <circle cx={x} cy={y} r={p.size} fill={p.color}/>
+        <circle cx={x} cy={y} r={p.size - 2} fill="white" opacity="0.4"/>
+      </g>
+    );
+  });
+
+  const floatEls = world.floats.map(f => (
+    <g key={f.id} transform={`translate(${f.x} ${f.y - f.t * 50})`} style={{opacity: 1 - f.t/0.7}}>
+      <text textAnchor="middle" fontFamily="Fredoka, sans-serif" fontWeight="700" fontSize={f.text === '闪避' ? 16 : 22} fill={f.color}
+            stroke="white" strokeWidth="3" paintOrder="stroke">
+        {f.text}
+      </text>
+    </g>
+  ));
+
+  // Range circle for selected placed tower
+  const selectedTw = world.selectedPlacedTower != null ? world.towers.find(t => t.id === world.selectedPlacedTower) : null;
+  const selectedRange = selectedTw && (() => {
+    const stats = towerStats(selectedTw);
+    const cx = selectedTw.gx*T + T/2, cy = selectedTw.gy*T + T/2;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={stats.range * T} fill="rgba(255,181,197,0.18)" stroke="#F58CA6" strokeWidth="3" strokeDasharray="8 6"/>
+      </g>
+    );
+  })();
+
+  // Ghost preview when placing
+  const ghostEl = ghost && (() => {
+    const def = TOWER_DEFS[ghost.type];
+    const Comp = def.Comp;
+    const cx = ghost.gx*T + T/2, cy = ghost.gy*T + T/2;
+    const valid = ghost.valid;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={def.range * T} fill={valid ? 'rgba(143,207,174,0.18)' : 'rgba(245,140,166,0.18)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="8 6"/>
+        <rect x={ghost.gx*T+4} y={ghost.gy*T+4} width={T-8} height={T-8} rx="14" fill={valid ? 'rgba(143,207,174,0.22)' : 'rgba(245,140,166,0.22)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="6 4"/>
+        <g transform={`translate(${cx - T/2} ${cy - T/2 - 4})`} opacity="0.7">
+          <Comp size={T}/>
+        </g>
+      </g>
+    );
+  })();
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="xMidYMid meet"
+      width="100%" height="100%"
+      style={{display:'block', cursor: ghost ? 'crosshair' : 'default'}}
+      onClick={onCellClick}
+      onContextMenu={onCellRightClick}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+    >
+      <defs>
+        <pattern id="grassPat" x="0" y="0" width={T} height={T} patternUnits="userSpaceOnUse">
+          <rect width={T} height={T} fill="#C4E4D4"/>
+          <circle cx={T*0.25} cy={T*0.3} r="3" fill="#A8D9C0" opacity="0.6"/>
+          <circle cx={T*0.7} cy={T*0.6} r="2.5" fill="#A8D9C0" opacity="0.5"/>
+          <circle cx={T*0.4} cy={T*0.8} r="2" fill="#FFB5C5" opacity="0.5"/>
+        </pattern>
+        <pattern id="grassPat2" x="0" y="0" width={T} height={T} patternUnits="userSpaceOnUse">
+          <rect width={T} height={T} fill="#D4ECDD"/>
+          <circle cx={T*0.6} cy={T*0.25} r="2.5" fill="#A8D9C0" opacity="0.5"/>
+          <circle cx={T*0.2} cy={T*0.6} r="2" fill="#F8E060" opacity="0.6"/>
+          <circle cx={T*0.8} cy={T*0.85} r="3" fill="#A8D9C0" opacity="0.5"/>
+        </pattern>
+      </defs>
+
+      {/* Grass tiles */}
+      {Array.from({length: ROWS}, (_, gy) =>
+        Array.from({length: COLS}, (_, gx) => (
+          <rect key={`${gx}-${gy}`} x={gx*T} y={gy*T} width={T} height={T} fill={(gx+gy)%2===0 ? 'url(#grassPat)' : 'url(#grassPat2)'}/>
+        ))
+      )}
+
+      {/* Subtle grid */}
+      {Array.from({length: COLS+1}, (_, i) => (
+        <line key={`v${i}`} x1={i*T} y1="0" x2={i*T} y2={H} stroke="#A8D9C0" strokeWidth="0.5" opacity="0.4"/>
+      ))}
+      {Array.from({length: ROWS+1}, (_, i) => (
+        <line key={`h${i}`} x1="0" y1={i*T} x2={W} y2={i*T} stroke="#A8D9C0" strokeWidth="0.5" opacity="0.4"/>
+      ))}
+
+      {/* Path strokes */}
+      <polyline points={PATH.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#E0BC8C" strokeWidth={T*0.95} strokeLinejoin="round" strokeLinecap="round"/>
+      <polyline points={PATH.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F5DEB3" strokeWidth={T*0.78} strokeLinejoin="round" strokeLinecap="round"/>
+
+      {/* Sprinkles along path */}
+      {PATH_GRID.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
+        const cx = gx*T + T/2, cy = gy*T + T/2;
+        const colors = ['#FFB5C5','#7BC4A0','#F8E060','#B79CD1','#F5B872'];
+        return (
+          <g key={`sp${i}`}>
+            <rect x={cx-18} y={cy-12} width="6" height="2.5" rx="1.2" fill={colors[i%5]} transform={`rotate(${(i*37)%180-90} ${cx-15} ${cy-11})`}/>
+            <rect x={cx+10} y={cy+8} width="6" height="2.5" rx="1.2" fill={colors[(i+2)%5]} transform={`rotate(${(i*53)%180-90} ${cx+13} ${cy+9})`}/>
+          </g>
+        );
+      })}
+
+      {/* Start marker */}
+      {(() => {
+        const p = PATH.points[0];
+        return (
+          <g>
+            <circle cx={p.x - 18} cy={p.y} r="22" fill="#8FCFAE" stroke="white" strokeWidth="3"/>
+            <text x={p.x - 18} y={p.y+5} textAnchor="middle" fontSize="16" fontWeight="700" fill="white" fontFamily="Fredoka, sans-serif">起</text>
+          </g>
+        );
+      })()}
+
+      {/* Castle (end) */}
+      {(() => {
+        const p = PATH.points[PATH.points.length-1];
+        return (
+          <g transform={`translate(${p.x + T/2 - 50} ${p.y - 50})`}>
+            <rect x="0" y="20" width="46" height="50" rx="4" fill="#FFE5EC"/>
+            <path d="M 0 20 L 6 8 L 12 20 L 18 8 L 24 20 L 30 8 L 36 20 L 42 8 L 46 20 Z" fill="#F58CA6"/>
+            <rect x="18" y="40" width="10" height="30" fill="#5A3E36"/>
+            <circle cx="23" cy="14" r="5" fill="#F58CA6"/>
+            <text x="23" y="86" textAnchor="middle" fontSize="11" fontWeight="700" fill="#5A3E36" fontFamily="Fredoka, sans-serif">糖果城堡</text>
+          </g>
+        );
+      })()}
+
+      {selectedRange}
+      {towerEls}
+      {ghostEl}
+      {enemyEls}
+      {projectileEls}
+      {floatEls}
+    </svg>
+  );
+}
+
+// ============================================================
+// Main Menu
+// ============================================================
+function MainMenu({ onStart }) {
+  return (
+    <div className="sprinkle-bg full" style={{position:'relative', overflow:'hidden'}}>
+      <div style={{position:'absolute', top:'8%', left:'8%'}} className="floaty"><Cupcake size={110}/></div>
+      <div style={{position:'absolute', top:'16%', right:'10%', animationDelay:'1s'}} className="floaty"><Macaron size={100}/></div>
+      <div style={{position:'absolute', bottom:'12%', left:'14%'}} className="floaty"><Donut size={120}/></div>
+      <div style={{position:'absolute', bottom:'18%', right:'8%'}} className="floaty"><IceCream size={110}/></div>
+      <div style={{position:'absolute', bottom:'8%', left:'6%'}} className="wobble"><Mouse size={80}/></div>
+      <div style={{position:'absolute', top:'10%', right:'30%'}} className="wobble"><Rabbit size={72}/></div>
+      <div style={{position:'absolute', bottom:'10%', right:'24%'}} className="wobble"><Fox size={84}/></div>
+
+      <div style={{position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center'}}>
+        <div className="font-display" style={{fontSize:14, letterSpacing:'0.4em', color:'var(--ink-soft)', marginBottom:8}}>SWEET DEFENSE</div>
+        <h1 className="font-display" style={{fontSize:96, lineHeight:1, color:'var(--ink)', marginBottom:6, fontWeight:700}}>
+          甜<span style={{color:'var(--pink-deep)'}}>点</span>防<span style={{color:'var(--mint-deep)'}}>御</span>
+        </h1>
+        <p style={{fontSize:18, color:'var(--ink-soft)', marginBottom:36, maxWidth:420}}>
+          用蛋糕守护你的糖果王国，不让小动物们偷走甜蜜！
+        </p>
+        <div style={{display:'flex', flexDirection:'column', gap:14, alignItems:'center'}}>
+          <button className="bubble-btn primary" style={{fontSize:24, padding:'20px 70px', minWidth:260}} onClick={onStart}>
+            🎮 开始游戏
+          </button>
+          <div style={{fontSize:12, color:'var(--ink-faint)', marginTop:6, maxWidth:380, lineHeight:1.6}}>
+            点击底部商店选塔 → 点击草地放置 → 右键/Esc 取消 → 点击已放置的塔可升级或出售
+          </div>
+        </div>
+      </div>
+      <div style={{position:'absolute', bottom:14, right:18, fontSize:12, color:'var(--ink-faint)'}}>v1.0 · 糖果工坊</div>
+    </div>
+  );
+}
+
+// ============================================================
+// Victory / Defeat
+// ============================================================
+function VictoryScreen({ stats, onRetry, onMenu }) {
+  return (
+    <div className="full" style={{
+      background:'linear-gradient(180deg, #FFE5EC 0%, #FFF4E6 50%, #C4E4D4 100%)',
+      position:'relative', overflow:'hidden',
+      display:'flex', alignItems:'center', justifyContent:'center'
+    }}>
+      {Array.from({length: 50}, (_, i) => {
+        const colors = ['var(--pink)','var(--butter)','var(--mint)','var(--lavender)','var(--peach)'];
+        const x = (i * 137) % 100, y = (i * 41) % 90;
+        return <div key={i} style={{position:'absolute', left:`${x}%`, top:`${y}%`, width:12, height:6, background:colors[i%5], borderRadius:2, transform:`rotate(${(i*37)%90 - 45}deg)`}}/>;
+      })}
+      <div style={{position:'absolute', top:'10%', left:'10%'}} className="floaty"><Cake size={100}/></div>
+      <div style={{position:'absolute', top:'14%', right:'12%'}} className="floaty"><Donut size={90}/></div>
+      <div style={{position:'absolute', bottom:'14%', left:'12%'}} className="floaty"><Macaron size={90}/></div>
+
+      <div style={{textAlign:'center', zIndex:1}}>
+        <div className="font-display wobble" style={{fontSize:18, letterSpacing:'0.3em', color:'var(--mint-deep)', marginBottom:8}}>✦ VICTORY ✦</div>
+        <h1 className="font-display" style={{fontSize:88, lineHeight:1, color:'var(--ink)', marginBottom:8}}>
+          甜蜜<span style={{color:'var(--pink-deep)'}}>胜利</span>!
+        </h1>
+        <p style={{fontSize:18, color:'var(--ink-soft)', marginBottom:24}}>糖果王国的甜蜜被你守护啦~</p>
+        <div style={{display:'flex', justifyContent:'center', gap:12, marginBottom:28}}>
+          <div className="floaty"><Star size={56}/></div>
+          <div className="floaty" style={{animationDelay:'0.2s'}}><Star size={70}/></div>
+          <div className="floaty"><Star size={56}/></div>
+        </div>
+        <div className="cute-card" style={{padding:'18px 32px', display:'inline-flex', gap:32, marginBottom:28}}>
+          <Stat label="剩余生命" val={stats.hp} icon={<Heart size={20}/>}/>
+          <Stat label="击败敌人" val={stats.killed} icon="🐭"/>
+          <Stat label="获得糖果" val={`+${stats.earned}`} icon={<Sugar size={20}/>}/>
+        </div>
+        <div style={{display:'flex', gap:12, justifyContent:'center'}}>
+          <button className="bubble-btn" style={{padding:'14px 28px', fontSize:16}} onClick={onMenu}>← 主菜单</button>
+          <button className="bubble-btn primary" style={{padding:'14px 36px', fontSize:18}} onClick={onRetry}>🔁 再玩一次</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DefeatScreen({ stats, onRetry, onMenu }) {
+  const tips = [
+    '冰淇淋塔可以减速刺猬，搭配马卡龙的高伤害射击效率更高！',
+    '把高伤害塔放在路径转弯处，敌人停留时间更长。',
+    '甜甜圈的环形伤害对付密集小怪非常高效。',
+    '蛋糕塔虽然贵，但 BOSS 战必备 — 提前攒糖准备一座。',
+    '别忘了升级！3 星塔的伤害是初始的 2.25 倍。',
+  ];
+  const tip = tips[(stats.killed * 7) % tips.length];
+  return (
+    <div className="full" style={{
+      background:'linear-gradient(180deg, #E8DDF0 0%, #F5E8DD 100%)',
+      position:'relative', overflow:'hidden',
+      display:'flex', alignItems:'center', justifyContent:'center'
+    }}>
+      <div style={{position:'absolute', top:'12%', left:'10%'}}><Bear size={110}/></div>
+      <div style={{position:'absolute', bottom:'14%', right:'12%'}}><Fox size={84}/></div>
+      <div style={{position:'absolute', bottom:'18%', left:'14%'}}><Raccoon size={78}/></div>
+
+      <div style={{textAlign:'center', zIndex:1, maxWidth:480}}>
+        <div style={{fontSize:72, marginBottom:8}}>😢</div>
+        <h1 className="font-display" style={{fontSize:72, lineHeight:1, color:'var(--ink)', marginBottom:8}}>
+          糖果<span style={{color:'var(--lavender-deep)'}}>被偷</span>了
+        </h1>
+        <p style={{fontSize:16, color:'var(--ink-soft)', marginBottom:18, lineHeight:1.5}}>
+          别灰心~ 调整策略，再守护一次甜蜜的王国吧！
+        </p>
+        <div className="cute-card" style={{padding:14, marginBottom:18, display:'inline-flex', gap:20}}>
+          <Stat label="坚持到" val={`第 ${stats.wave} 波`} icon="⏱"/>
+          <Stat label="击败敌人" val={stats.killed} icon="🐭"/>
+        </div>
+        <div className="cute-card" style={{padding:16, marginBottom:24, textAlign:'left', maxWidth:420, margin:'0 auto 24px'}}>
+          <div className="font-display" style={{fontSize:14, color:'var(--ink-soft)', marginBottom:8, letterSpacing:'0.15em'}}>💡 小提示</div>
+          <div style={{fontSize:14, lineHeight:1.6}}>{tip}</div>
+        </div>
+        <div style={{display:'flex', gap:12, justifyContent:'center'}}>
+          <button className="bubble-btn" style={{padding:'14px 28px', fontSize:16}} onClick={onMenu}>← 主菜单</button>
+          <button className="bubble-btn primary" style={{padding:'14px 36px', fontSize:18}} onClick={onRetry}>🔁 重新挑战</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, val, icon }) {
+  return (
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:11, color:'var(--ink-soft)', marginBottom:4, letterSpacing:'0.1em'}}>{label}</div>
+      <div className="font-display" style={{fontSize:26, display:'flex', alignItems:'center', gap:6, justifyContent:'center'}}>
+        {icon}{val}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Gameplay screen — composes board + HUD + shop + modal
+// ============================================================
+function GameplayScreen({ onWin, onLose, onMenu }) {
+  const worldRef = useRef(initWorld());
+  const [, forceTick] = useState(0);
+  const svgRef = useRef(null);
+  const [hover, setHover] = useState(null); // {gx, gy}
+
+  const w = worldRef.current;
+
+  useEffect(() => {
+    let raf;
+    let last = performance.now();
+    const loop = (now) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      update(worldRef.current, dt);
+      forceTick(t => (t + 1) & 0xffff);
+      const ww = worldRef.current;
+      if (ww.finished === 'win') {
+        onWin({ hp: ww.hp, killed: ww.enemiesKilled, earned: ww.sugarEarned });
+        return;
+      }
+      if (ww.finished === 'lose') {
+        onLose({ hp: 0, killed: ww.enemiesKilled, wave: ww.waveIdx + 1 });
+        return;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [onWin, onLose]);
+
+  // Keyboard: Esc cancels, P pauses
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        worldRef.current.selectedTowerType = null;
+        worldRef.current.selectedPlacedTower = null;
+        forceTick(t => t + 1);
+      }
+      if (e.key === 'p' || e.key === 'P' || e.key === ' ') {
+        e.preventDefault();
+        worldRef.current.speed = worldRef.current.speed === 0 ? 1 : 0;
+        forceTick(t => t + 1);
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        worldRef.current.speed = worldRef.current.speed === 2 ? 1 : 2;
+        forceTick(t => t + 1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const eventToCell = (e) => {
+    if (!svgRef.current) return null;
+    const rect = svgRef.current.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) / rect.width * W;
+    const sy = (e.clientY - rect.top) / rect.height * H;
+    const gx = Math.floor(sx / T);
+    const gy = Math.floor(sy / T);
+    if (gx < 0 || gx >= COLS || gy < 0 || gy >= ROWS) return null;
+    return { gx, gy };
+  };
+
+  const towerAt = (gx, gy) => w.towers.find(tw => tw.gx === gx && tw.gy === gy);
+
+  const onMouseMove = (e) => {
+    const c = eventToCell(e);
+    setHover(c);
+  };
+  const onMouseLeave = () => setHover(null);
+
+  const onCellClick = (e) => {
+    const c = eventToCell(e);
+    if (!c) return;
+    // Selecting a placed tower? handled by tower onClick (stopPropagation)
+    if (w.selectedTowerType) {
+      const def = TOWER_DEFS[w.selectedTowerType];
+      if (isPathCell(c.gx, c.gy)) return;
+      if (towerAt(c.gx, c.gy)) return;
+      if (w.sugar < def.cost) return;
+      w.sugar -= def.cost;
+      w.towers.push({
+        id: w.nextId++,
+        type: w.selectedTowerType,
+        gx: c.gx, gy: c.gy,
+        level: 1,
+        invested: def.cost,
+        cooldown: 0,
+        shootPulse: 0,
+      });
+      // Stay in place mode if shift is held (otherwise exit)
+      if (!e.shiftKey) w.selectedTowerType = null;
+      forceTick(t => t + 1);
+      return;
+    }
+    // Otherwise, deselect any placed tower
+    if (w.selectedPlacedTower != null) {
+      w.selectedPlacedTower = null;
+      forceTick(t => t + 1);
+    }
+  };
+
+  const onCellRightClick = (e) => {
+    e.preventDefault();
+    if (w.selectedTowerType) {
+      w.selectedTowerType = null;
+      forceTick(t => t + 1);
+    }
+  };
+
+  const onTowerClick = (id) => {
+    if (w.selectedTowerType) return; // ignore while placing
+    w.selectedPlacedTower = id;
+    forceTick(t => t + 1);
+  };
+
+  const onShopSelect = (type) => {
+    w.selectedTowerType = w.selectedTowerType === type ? null : type;
+    w.selectedPlacedTower = null;
+    forceTick(t => t + 1);
+  };
+
+  const onPause = () => {
+    w.speed = w.speed === 0 ? 1 : 0;
+    forceTick(t => t + 1);
+  };
+  const onSpeed = () => {
+    w.speed = w.speed === 2 ? 1 : 2;
+    forceTick(t => t + 1);
+  };
+  const onEarlyStart = () => {
+    if (w.waveState === 'preparing' && w.waveTimer < 0) {
+      w.sugar += 5;
+      w.sugarEarned += 5;
+      w.waveTimer = 0;
+      forceTick(t => t + 1);
+    }
+  };
+
+  const onUpgrade = () => {
+    const tw = w.towers.find(t => t.id === w.selectedPlacedTower);
+    if (!tw) return;
+    const cost = upgradeCost(tw);
+    if (cost == null || w.sugar < cost) return;
+    w.sugar -= cost;
+    tw.level += 1;
+    tw.invested += cost;
+    forceTick(t => t + 1);
+  };
+
+  const onSell = () => {
+    const tw = w.towers.find(t => t.id === w.selectedPlacedTower);
+    if (!tw) return;
+    w.sugar += sellRefund(tw);
+    w.towers = w.towers.filter(t => t.id !== tw.id);
+    w.selectedPlacedTower = null;
+    forceTick(t => t + 1);
+  };
+
+  const onCloseModal = () => {
+    w.selectedPlacedTower = null;
+    forceTick(t => t + 1);
+  };
+
+  // Ghost preview
+  const ghost = (() => {
+    if (!w.selectedTowerType || !hover) return null;
+    const valid = !isPathCell(hover.gx, hover.gy)
+      && !towerAt(hover.gx, hover.gy)
+      && w.sugar >= TOWER_DEFS[w.selectedTowerType].cost;
+    return { type: w.selectedTowerType, gx: hover.gx, gy: hover.gy, valid };
+  })();
+
+  const selectedTw = w.selectedPlacedTower != null ? w.towers.find(t => t.id === w.selectedPlacedTower) : null;
+
+  return (
+    <div className="full" style={{position:'relative', overflow:'hidden', background:'#C4E4D4'}}>
+      <div style={{position:'absolute', inset:0}}>
+        <GameBoard
+          world={w}
+          hover={hover}
+          ghost={ghost}
+          onCellClick={onCellClick}
+          onCellRightClick={onCellRightClick}
+          onTowerClick={onTowerClick}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
+          svgRef={svgRef}
+        />
+      </div>
+      <HUD world={w} onPause={onPause} onSpeed={onSpeed} onMenu={onMenu} onEarlyStart={onEarlyStart}/>
+      <WavePreview world={w} onEarlyStart={onEarlyStart}/>
+      <TowerShop selected={w.selectedTowerType} sugar={w.sugar} onSelect={onShopSelect}/>
+      {selectedTw && (
+        <TowerDetailModal
+          tower={selectedTw}
+          sugar={w.sugar}
+          onUpgrade={onUpgrade}
+          onSell={onSell}
+          onClose={onCloseModal}
+        />
+      )}
+      {w.speed === 0 && (
+        <div style={{position:'absolute', inset:0, background:'rgba(40,28,24,0.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:7, pointerEvents:'none'}}>
+          <div className="font-display" style={{fontSize:88, color:'white', textShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>⏸ 暂停</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// App — top-level screen router
+// ============================================================
+function App() {
+  const [screen, setScreen] = useState('menu');
+  const [stats, setStats] = useState(null);
+
+  if (screen === 'menu') {
+    return <MainMenu onStart={() => setScreen('play')}/>;
+  }
+  if (screen === 'play') {
+    return <GameplayScreen
+      key={Date.now()}
+      onWin={s => { setStats(s); setScreen('victory'); }}
+      onLose={s => { setStats(s); setScreen('defeat'); }}
+      onMenu={() => setScreen('menu')}
+    />;
+  }
+  if (screen === 'victory') {
+    return <VictoryScreen stats={stats} onRetry={() => setScreen('play')} onMenu={() => setScreen('menu')}/>;
+  }
+  if (screen === 'defeat') {
+    return <DefeatScreen stats={stats} onRetry={() => setScreen('play')} onMenu={() => setScreen('menu')}/>;
+  }
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+:root {
+  --cream: #FFF4E6;
+  --cream-2: #FFEAD0;
+  --cream-3: #FBDDB7;
+  --pink: #FFB5C5;
+  --pink-deep: #F58CA6;
+  --peach: #FFD9A0;
+  --peach-deep: #F5B872;
+  --mint: #C4E4D4;
+  --mint-deep: #8FCFAE;
+  --lavender: #D9C5E8;
+  --lavender-deep: #B79CD1;
+  --butter: #F8E8B0;
+  --butter-deep: #E8CE6E;
+  --berry: #E08FB4;
+  --choco: #B68A6E;
+  --ink: #5A3E36;
+  --ink-soft: #8B6F5C;
+  --ink-faint: #B89A87;
+  --shadow-soft: 0 6px 16px rgba(180, 110, 80, 0.18);
+  --shadow-card: 0 8px 24px rgba(180, 110, 80, 0.12), 0 2px 6px rgba(180, 110, 80, 0.08);
+  --shadow-deep: 0 14px 40px rgba(180, 110, 80, 0.22);
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+  --radius-xl: 40px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: 'Nunito', 'Noto Sans SC', system-ui, sans-serif;
+  color: var(--ink);
+  background: #F5EBDD;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+#root { width: 100%; height: 100%; }
+.font-display { font-family: 'Fredoka', 'Noto Sans SC', sans-serif; font-weight: 600; letter-spacing: 0.01em; }
+.sprinkle-bg {
+  background-color: var(--cream);
+  background-image:
+    radial-gradient(circle at 20% 20%, var(--pink) 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 40%, var(--mint) 2px, transparent 2.5px),
+    radial-gradient(circle at 40% 75%, var(--butter) 2px, transparent 2.5px),
+    radial-gradient(circle at 85% 80%, var(--lavender) 2px, transparent 2.5px),
+    radial-gradient(circle at 10% 65%, var(--peach) 2px, transparent 2.5px);
+  background-size: 120px 120px, 140px 140px, 110px 110px, 160px 160px, 130px 130px;
+  background-position: 0 0, 30px 50px, 60px 20px, 10px 70px, 80px 40px;
+}
+.bubble-btn {
+  font-family: 'Fredoka', 'Noto Sans SC', sans-serif;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 28px;
+  cursor: pointer;
+  background: white;
+  color: var(--ink);
+  box-shadow: 0 4px 0 rgba(180, 110, 80, 0.15), var(--shadow-soft);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.bubble-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(180, 110, 80, 0.15), var(--shadow-card); }
+.bubble-btn:active { transform: translateY(1px); }
+.bubble-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.bubble-btn.primary {
+  background: linear-gradient(180deg, var(--pink) 0%, var(--pink-deep) 100%);
+  color: white;
+  box-shadow: 0 4px 0 var(--pink-deep), 0 8px 18px rgba(245, 140, 166, 0.4);
+}
+.bubble-btn.mint {
+  background: linear-gradient(180deg, var(--mint) 0%, var(--mint-deep) 100%);
+  color: white;
+  box-shadow: 0 4px 0 var(--mint-deep), 0 8px 18px rgba(143, 207, 174, 0.4);
+}
+.cute-card {
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  border: 2px solid rgba(255, 234, 208, 0.8);
+}
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
+  border: 2px solid var(--cream-2);
+}
+@keyframes wobble { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(2deg); } }
+.wobble { animation: wobble 3s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.floaty { animation: float 4s ease-in-out infinite; }
+@keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.pop { animation: pop 0.18s ease-out; }
+.shop-card { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.shop-card:hover:not(.disabled) { transform: translateY(-3px); }
+.shop-card.disabled { opacity: 0.55; cursor: not-allowed; filter: saturate(0.6); }
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(40, 28, 24, 0.45);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+@keyframes modalIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.modal-in { animation: modalIn 0.22s cubic-bezier(.2,.9,.4,1.2); }
+.full { width: 100%; height: 100%; }
+@keyframes prepPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.prep-pulse { animation: prepPulse 1s ease-in-out infinite; }
