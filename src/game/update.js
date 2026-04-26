@@ -137,6 +137,21 @@ export function update(w, rawDt) {
   }
   w.walls = w.walls.filter(wl => !wl.dead);
 
+  // Resolve focus target (auto-clear if it no longer exists).
+  let focusTarget = null;
+  let focusKind = null;
+  let focusPos = null;
+  if (w.focus) {
+    if (w.focus.kind === 'enemy') {
+      const ent = w.enemies.find(e => e.id === w.focus.id && !e.dead && e.hp > 0);
+      if (ent) { focusTarget = ent; focusKind = 'enemy'; focusPos = posAt(ent.dist); }
+    } else if (w.focus.kind === 'obstacle') {
+      const ob = w.obstacles.find(o => o.id === w.focus.id);
+      if (ob) { focusTarget = ob; focusKind = 'obstacle'; focusPos = { x: ob.gx * T + T / 2, y: ob.gy * T + T / 2 }; }
+    }
+    if (!focusTarget) w.focus = null;
+  }
+
   for (const tw of w.towers) {
     const stats = towerStats(tw);
     tw.cooldown = Math.max(0, (tw.cooldown || 0) - dt);
@@ -145,23 +160,37 @@ export function update(w, rawDt) {
 
     const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
     const rangePx = stats.range * T;
-    let best = null, bestProgress = -1;
-    for (const e of w.enemies) {
-      if (e.dead || e.hp <= 0) continue;
-      const ep = posAt(e.dist);
-      const d = Math.hypot(ep.x - tx, ep.y - ty);
-      if (d <= rangePx && e.dist > bestProgress) {
-        best = e;
-        bestProgress = e.dist;
+
+    // Pick target: focus first if in range, else leading enemy.
+    let chosen = null, chosenKind = null, chosenPos = null;
+    if (focusTarget && focusPos) {
+      const d = Math.hypot(focusPos.x - tx, focusPos.y - ty);
+      if (d <= rangePx) {
+        chosen = focusTarget;
+        chosenKind = focusKind;
+        chosenPos = focusPos;
       }
     }
-    if (best) {
-      const ep = posAt(best.dist);
+    if (!chosen) {
+      let best = null, bestProgress = -1;
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0) continue;
+        const ep = posAt(e.dist);
+        const d = Math.hypot(ep.x - tx, ep.y - ty);
+        if (d <= rangePx && e.dist > bestProgress) {
+          best = e; bestProgress = e.dist;
+        }
+      }
+      if (best) { chosen = best; chosenKind = 'enemy'; chosenPos = posAt(best.dist); }
+    }
+
+    if (chosen) {
       w.projectiles.push({
         id: w.nextId++,
         fromX: tx, fromY: ty,
-        toX: ep.x, toY: ep.y,
-        targetId: best.id,
+        toX: chosenPos.x, toY: chosenPos.y,
+        targetId: chosen.id,
+        targetKind: chosenKind,
         t: 0,
         duration: tw.type === 'macaron' ? 0.14 : tw.type === 'cake' ? 0.20 : 0.16,
         color: stats.proj,
@@ -175,7 +204,6 @@ export function update(w, rawDt) {
       tw.cooldown = stats.cd;
       tw.shootPulse = 0.20;
       spawnFlash(w, tx, ty, stats.proj);
-      // Throttle shoot SFX so high-frequency towers don't drown the mix
       if (Math.random() < (tw.type === 'choco' ? 0.35 : tw.type === 'cupcake' ? 0.7 : 1)) {
         play(shootSoundFor(tw.type));
       }
@@ -184,32 +212,59 @@ export function update(w, rawDt) {
 
   for (const p of w.projectiles) {
     p.t += dt / p.duration;
-    if (p.t >= 1) {
+    if (p.t < 1) continue;
+
+    let hitX = p.toX, hitY = p.toY;
+    let landed = false;
+    let primaryEnemyId = null;
+
+    if (p.targetKind === 'enemy') {
       const target = w.enemies.find(e => e.id === p.targetId);
-      let hitX = p.toX, hitY = p.toY;
-      let landed = false;
       if (target && !target.dead) {
         const ep = posAt(target.dist);
         hitX = ep.x; hitY = ep.y;
         landed = applyDamage(w, target, p.dmg, p);
+        primaryEnemyId = target.id;
       }
-      if (p.splash) {
-        const r = p.splash * T;
-        for (const e of w.enemies) {
-          if (e.dead || e.hp <= 0) continue;
-          if (target && e.id === target.id) continue;
-          const ep = posAt(e.dist);
-          const d = Math.hypot(ep.x - hitX, ep.y - hitY);
-          if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
+    } else if (p.targetKind === 'obstacle') {
+      const ob = w.obstacles.find(o => o.id === p.targetId);
+      if (ob) {
+        hitX = ob.gx * T + T / 2; hitY = ob.gy * T + T / 2;
+        ob.hp -= p.dmg;
+        ob.flash = 0.13;
+        w.floats.push({ id: w.nextId++, x: hitX, y: hitY - 24, text: `-${Math.round(p.dmg)}`, color: '#E85A7A', t: 0 });
+        landed = true;
+        if (ob.hp <= 0) {
+          // Destroy + reward
+          w.sugar += ob.reward;
+          w.sugarEarned += ob.reward;
+          w.obstacles = w.obstacles.filter(o => o.id !== ob.id);
+          spawnBurst(w, hitX, hitY, '#A98467', 14, true);
+          w.floats.push({ id: w.nextId++, x: hitX, y: hitY - 48, text: `+${ob.reward}`, color: '#F8E060', t: 0 });
+          if (w.focus && w.focus.kind === 'obstacle' && w.focus.id === ob.id) {
+            w.focus = null;
+          }
+          play('coin');
         }
-        spawnBurst(w, hitX, hitY, p.color, 10, true);
-        play('splash');
-      } else {
-        spawnBurst(w, hitX, hitY, p.color, 5, false);
-        if (landed) play('hit');
       }
-      p.dead = true;
     }
+
+    if (p.splash) {
+      const r = p.splash * T;
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0) continue;
+        if (primaryEnemyId != null && e.id === primaryEnemyId) continue;
+        const ep = posAt(e.dist);
+        const d = Math.hypot(ep.x - hitX, ep.y - hitY);
+        if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
+      }
+      spawnBurst(w, hitX, hitY, p.color, 10, true);
+      play('splash');
+    } else {
+      spawnBurst(w, hitX, hitY, p.color, 5, false);
+      if (landed) play('hit');
+    }
+    p.dead = true;
   }
   w.projectiles = w.projectiles.filter(p => !p.dead);
 
@@ -229,6 +284,9 @@ export function update(w, rawDt) {
   }
   w.enemies = w.enemies.filter(e => !e.dead);
 
+  for (const ob of w.obstacles) {
+    if (ob.flash > 0) ob.flash = Math.max(0, ob.flash - dt);
+  }
   for (const f of w.floats) f.t += dt;
   w.floats = w.floats.filter(f => f.t < 0.7);
   for (const fl of w.flashes) fl.t += dt;

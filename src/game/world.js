@@ -1,10 +1,13 @@
-import { TOWER_DEFS, PREP_DURATION, OBSTACLE_COST } from './constants.js';
+import { TOWER_DEFS, PREP_DURATION, OBSTACLE_HP, OBSTACLE_REWARD } from './constants.js';
 import { distAtCell } from './path.js';
 
 export function initWorld(level) {
   let id = 1;
   const obstacles = (level.obstacles || []).map(([gx, gy]) => ({
-    id: id++, gx, gy, cost: OBSTACLE_COST,
+    id: id++, gx, gy,
+    hp: OBSTACLE_HP, maxHp: OBSTACLE_HP,
+    reward: OBSTACLE_REWARD,
+    flash: 0,
   }));
   return {
     level,
@@ -18,13 +21,14 @@ export function initWorld(level) {
     enemies: [],
     towers: [],
     walls: [],          // path-blocking nougat walls
-    obstacles,          // clearable boulders on grass
+    obstacles,          // chocolate boulders — destructible, reward when broken
     projectiles: [],
     floats: [],
     flashes: [],
     bursts: [],
     selectedTowerType: null,
     selectedPlacedTower: null,
+    focus: null,        // {kind: 'enemy'|'obstacle', id} — manual focus-fire target
     nextId: id,
     enemiesKilled: 0,
     sugarEarned: 0,

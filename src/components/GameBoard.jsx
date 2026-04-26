@@ -6,7 +6,7 @@ import { towerStats } from '../game/world.js';
 export default function GameBoard({
   world, ghost, theme,
   svgRef,
-  onCellClick, onCellRightClick, onTowerClick, onObstacleClick,
+  onCellClick, onCellRightClick, onTowerClick, onObstacleClick, onEnemyClick,
   onMouseMove, onMouseLeave,
 }) {
   const enemyEls = world.enemies.map(e => {
@@ -17,7 +17,15 @@ export default function GameBoard({
     const hpPct = e.hp / e.maxHp;
     const hpW = def.boss ? 70 : 44;
     return (
-      <g key={e.id} transform={`translate(${ep.x} ${ep.y})`} style={{ filter: e.flash > 0 ? 'brightness(1.6) saturate(0.5)' : `drop-shadow(0 ${def.boss ? 6 : 4}px ${def.boss ? 6 : 4}px rgba(60,40,32,0.45))` }}>
+      <g
+        key={e.id}
+        transform={`translate(${ep.x} ${ep.y})`}
+        style={{
+          cursor: 'crosshair',
+          filter: e.flash > 0 ? 'brightness(1.6) saturate(0.5)' : `drop-shadow(0 ${def.boss ? 6 : 4}px ${def.boss ? 6 : 4}px rgba(60,40,32,0.45))`,
+        }}
+        onClick={(ev) => { ev.stopPropagation(); onEnemyClick && onEnemyClick(e.id); }}
+      >
         <g transform={`translate(${-size / 2} ${-size / 2})`}>
           <Comp size={size} />
         </g>
@@ -148,6 +156,34 @@ export default function GameBoard({
     );
   });
 
+  // Focus-fire crosshair (red, pulsing/rotating ring + cardinal ticks)
+  const focusEl = (() => {
+    const f = world.focus;
+    if (!f) return null;
+    let pos = null;
+    if (f.kind === 'enemy') {
+      const ent = world.enemies.find(e => e.id === f.id && !e.dead);
+      if (ent) pos = posAt(ent.dist);
+    } else if (f.kind === 'obstacle') {
+      const ob = world.obstacles.find(o => o.id === f.id);
+      if (ob) pos = { x: ob.gx * T + T / 2, y: ob.gy * T + T / 2 };
+    }
+    if (!pos) return null;
+    return (
+      <g transform={`translate(${pos.x} ${pos.y})`} style={{ pointerEvents: 'none' }}>
+        <g>
+          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="5s" repeatCount="indefinite" />
+          <circle r="34" fill="none" stroke="#FF4D6D" strokeWidth="3" strokeDasharray="9 5" opacity="0.95" />
+        </g>
+        <line x1="-44" y1="0" x2="-26" y2="0" stroke="#FF4D6D" strokeWidth="3" strokeLinecap="round" />
+        <line x1="26" y1="0" x2="44" y2="0" stroke="#FF4D6D" strokeWidth="3" strokeLinecap="round" />
+        <line x1="0" y1="-44" x2="0" y2="-26" stroke="#FF4D6D" strokeWidth="3" strokeLinecap="round" />
+        <line x1="0" y1="26" x2="0" y2="44" stroke="#FF4D6D" strokeWidth="3" strokeLinecap="round" />
+        <circle r="4" fill="#FF4D6D" />
+      </g>
+    );
+  })();
+
   const floatEls = world.floats.map(f => (
     <g key={f.id} transform={`translate(${f.x} ${f.y - f.t * 50})`} style={{ opacity: 1 - f.t / 0.7 }}>
       <text textAnchor="middle" fontFamily="Fredoka, sans-serif" fontWeight="700" fontSize={f.text === '闪避' ? 16 : 22} fill={f.color}
@@ -207,21 +243,31 @@ export default function GameBoard({
   const obstacleEls = world.obstacles.map(ob => {
     const cx = ob.gx * T + T / 2, cy = ob.gy * T + T / 2;
     const sz = T * 0.92;
+    const hpPct = ob.hp / ob.maxHp;
+    const damaged = hpPct < 1;
+    const flashFilter = ob.flash > 0
+      ? 'brightness(1.5) saturate(0.5)'
+      : 'drop-shadow(0 5px 4px rgba(60,40,32,0.45))';
     return (
       <g
         key={`ob${ob.id}`}
-        style={{ cursor: 'pointer', filter: 'drop-shadow(0 5px 4px rgba(60,40,32,0.45))' }}
+        style={{ cursor: 'crosshair', filter: flashFilter }}
         onClick={(e) => { e.stopPropagation(); onObstacleClick(ob.id); }}
       >
         <g transform={`translate(${cx - sz / 2} ${cy - sz / 2})`}>
           <Boulder size={sz} />
         </g>
-        {/* Cost badge */}
-        <g transform={`translate(${cx + T * 0.28} ${cy - T * 0.30})`}>
-          <rect x="-18" y="-10" width="36" height="20" rx="10" fill="white" stroke="#F58CA6" strokeWidth="2" />
-          <text x="-3" y="4" textAnchor="middle" fontSize="11" fontWeight="800" fill="#5A3E36" fontFamily="Fredoka, sans-serif">{ob.cost}</text>
-          <circle cx="9" cy="0" r="6" fill="#FFD9A0" />
-          <text x="9" y="3" textAnchor="middle" fontSize="7" fontWeight="800" fill="#8B5E3C" fontFamily="Fredoka, sans-serif">糖</text>
+        {damaged && (
+          <g transform={`translate(${cx - 22} ${cy - sz / 2 - 10})`}>
+            <rect x="0" y="0" width="44" height="6" rx="3" fill="white" stroke="#E5DCC5" strokeWidth="1" />
+            <rect x="2" y="1.5" width={40 * hpPct} height="3" rx="1.5"
+                  fill={hpPct > 0.5 ? '#8FCFAE' : hpPct > 0.25 ? '#F8E060' : '#F58CA6'} />
+          </g>
+        )}
+        {/* Reward hint badge (sugar coin + amount) */}
+        <g transform={`translate(${cx + T * 0.30} ${cy - T * 0.32})`}>
+          <circle r="11" fill="#FFD9A0" stroke="#F5B872" strokeWidth="2" />
+          <text x="0" y="3" textAnchor="middle" fontSize="9" fontWeight="800" fill="#8B5E3C" fontFamily="Fredoka, sans-serif">+{ob.reward}</text>
         </g>
       </g>
     );
@@ -339,6 +385,7 @@ export default function GameBoard({
       {projectileEls}
       {flashEls}
       {burstEls}
+      {focusEl}
       {floatEls}
     </svg>
   );

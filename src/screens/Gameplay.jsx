@@ -57,6 +57,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       if (e.key === 'Escape') {
         ww.selectedTowerType = null;
         ww.selectedPlacedTower = null;
+        ww.focus = null;
         forceTick(t => t + 1);
       }
       if (e.key === 'p' || e.key === 'P' || e.key === ' ') {
@@ -144,32 +145,42 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       forceTick(t => t + 1);
       return;
     }
-    if (w.selectedPlacedTower != null) {
-      w.selectedPlacedTower = null;
-      forceTick(t => t + 1);
-    }
+    let dirty = false;
+    if (w.selectedPlacedTower != null) { w.selectedPlacedTower = null; dirty = true; }
+    if (w.focus != null) { w.focus = null; dirty = true; }
+    if (dirty) forceTick(t => t + 1);
   };
 
   const onObstacleClick = (id) => {
     if (w.selectedTowerType) return; // ignore while placing
-    const ob = w.obstacles.find(o => o.id === id);
-    if (!ob) return;
-    if (w.sugar < ob.cost) {
-      play('deny');
-      return;
+    if (w.focus && w.focus.kind === 'obstacle' && w.focus.id === id) {
+      w.focus = null; // toggle off
+    } else {
+      w.focus = { kind: 'obstacle', id };
+      play('click');
     }
-    w.sugar -= ob.cost;
-    w.obstacles = w.obstacles.filter(o => o.id !== id);
-    play('sell');
+    w.selectedPlacedTower = null;
+    forceTick(t => t + 1);
+  };
+
+  const onEnemyClick = (id) => {
+    if (w.selectedTowerType) return;
+    if (w.focus && w.focus.kind === 'enemy' && w.focus.id === id) {
+      w.focus = null;
+    } else {
+      w.focus = { kind: 'enemy', id };
+      play('click');
+    }
+    w.selectedPlacedTower = null;
     forceTick(t => t + 1);
   };
 
   const onCellRightClick = (e) => {
     e.preventDefault();
-    if (w.selectedTowerType) {
-      w.selectedTowerType = null;
-      forceTick(t => t + 1);
-    }
+    let dirty = false;
+    if (w.selectedTowerType) { w.selectedTowerType = null; dirty = true; }
+    if (w.focus) { w.focus = null; dirty = true; }
+    if (dirty) forceTick(t => t + 1);
   };
 
   const onTowerClick = (id) => {
@@ -251,6 +262,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
           onCellRightClick={onCellRightClick}
           onTowerClick={onTowerClick}
           onObstacleClick={onObstacleClick}
+          onEnemyClick={onEnemyClick}
           onMouseMove={onMouseMove}
           onMouseLeave={onMouseLeave}
         />

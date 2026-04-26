@@ -39,7 +39,10 @@ export const WALL_DEFS = {
 // Boulder obstacle component (used by GameBoard)
 export { Boulder } from '../art/structures.jsx';
 
-export const OBSTACLE_COST = 30;
+// Obstacles are now destructible by towers (via focus-fire). They award
+// sugar when killed instead of costing sugar to clear manually.
+export const OBSTACLE_HP = 60;
+export const OBSTACLE_REWARD = 40;
 export const ENGAGE_DIST = T * 0.5; // px in front of wall where enemies stop
 
 export const ENEMY_DEFS = {
