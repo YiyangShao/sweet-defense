@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Heart, Sugar } from '../art/icons.jsx';
 
-export default function HUD({ world, totalWaves, onPause, onSpeed, onMenu }) {
+export default function HUD({ world, totalWaves, onPause, onSpeed, onMenu, muted, onMute }) {
   const wave = world.waveIdx + 1;
   const time = (() => {
     const s = Math.floor(world.elapsed);
@@ -33,6 +33,7 @@ export default function HUD({ world, totalWaves, onPause, onSpeed, onMenu }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, pointerEvents: 'auto' }}>
+        <button className="bubble-btn" style={{ padding: '10px 14px', fontSize: 14 }} onClick={onMute} title={muted ? '取消静音' : '静音'}>{muted ? '🔇' : '🔊'}</button>
         <button className="bubble-btn" style={{ padding: '10px 14px', fontSize: 14 }} onClick={onPause}>{world.speed === 0 ? '▶' : '⏸'}</button>
         <button className={`bubble-btn ${world.speed === 2 ? 'mint' : ''}`} style={{ padding: '10px 14px', fontSize: 14 }} onClick={onSpeed}>{world.speed === 2 ? '▶▶ 加速中' : '▶▶ 加速'}</button>
       </div>

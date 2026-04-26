@@ -1,6 +1,11 @@
-import { TOWER_DEFS, PREP_DURATION } from './constants.js';
+import { TOWER_DEFS, PREP_DURATION, OBSTACLE_COST } from './constants.js';
+import { distAtCell } from './path.js';
 
 export function initWorld(level) {
+  let id = 1;
+  const obstacles = (level.obstacles || []).map(([gx, gy]) => ({
+    id: id++, gx, gy, cost: OBSTACLE_COST,
+  }));
   return {
     level,
     hp: level.startHp,
@@ -12,15 +17,31 @@ export function initWorld(level) {
     speed: 1,
     enemies: [],
     towers: [],
+    walls: [],          // path-blocking nougat walls
+    obstacles,          // clearable boulders on grass
     projectiles: [],
     floats: [],
+    flashes: [],
+    bursts: [],
     selectedTowerType: null,
     selectedPlacedTower: null,
-    nextId: 1,
+    nextId: id,
     enemiesKilled: 0,
     sugarEarned: 0,
     elapsed: 0,
     finished: null,
+  };
+}
+
+export function placeWall(w, def, gx, gy) {
+  const dist = distAtCell(gx, gy);
+  return {
+    id: w.nextId++,
+    gx, gy,
+    dist,
+    hp: def.hp,
+    maxHp: def.hp,
+    flash: 0,
   };
 }
 

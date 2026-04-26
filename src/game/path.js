@@ -29,3 +29,17 @@ export function posAt(dist) {
 export function inBounds(gx, gy) {
   return gx >= 0 && gx < COLS && gy >= 0 && gy < ROWS;
 }
+
+// Index of a path cell in PATH_GRID, or -1 if not on path.
+export function pathIndexOf(gx, gy) {
+  for (let i = 0; i < PATH_GRID.length; i++) {
+    if (PATH_GRID[i][0] === gx && PATH_GRID[i][1] === gy) return i;
+  }
+  return -1;
+}
+
+// Cumulative distance along path at the centre of a path cell.
+export function distAtCell(gx, gy) {
+  const idx = pathIndexOf(gx, gy);
+  return idx >= 0 ? PATH.cum[idx] : -1;
+}

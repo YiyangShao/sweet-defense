@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { LEVELS } from './game/constants.js';
+import { play } from './game/sfx.js';
 import MainMenu from './screens/MainMenu.jsx';
 import LevelSelect from './screens/LevelSelect.jsx';
 import Gameplay from './screens/Gameplay.jsx';
@@ -34,6 +35,19 @@ export default function App() {
   const [levelIdx, setLevelIdx] = useState(0);
   const [progress, setProgress] = useState(loadProgress);
   const [playToken, setPlayToken] = useState(0); // bumps to remount Gameplay on retry
+
+  // Global UI click sound for any .bubble-btn or .shop-card.
+  // Fires after React's onClick (native bubble), so the action runs first.
+  useEffect(() => {
+    const handler = (e) => {
+      const el = e.target.closest('button.bubble-btn, .shop-card');
+      if (el && !el.classList.contains('disabled') && !el.disabled) {
+        play('click');
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
 
   const startLevel = useCallback((i) => {
     setLevelIdx(i);

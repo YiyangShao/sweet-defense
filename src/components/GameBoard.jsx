@@ -1,11 +1,12 @@
-import { TOWER_DEFS, ENEMY_DEFS, T, COLS, ROWS, W, H, PATH_GRID } from '../game/constants.js';
+import { TOWER_DEFS, ENEMY_DEFS, WALL_DEFS, T, COLS, ROWS, W, H, PATH_GRID } from '../game/constants.js';
+import { Boulder, NougatWall } from '../art/structures.jsx';
 import { PATH, posAt } from '../game/path.js';
 import { towerStats } from '../game/world.js';
 
 export default function GameBoard({
   world, ghost, theme,
   svgRef,
-  onCellClick, onCellRightClick, onTowerClick,
+  onCellClick, onCellRightClick, onTowerClick, onObstacleClick,
   onMouseMove, onMouseLeave,
 }) {
   const enemyEls = world.enemies.map(e => {
@@ -16,7 +17,7 @@ export default function GameBoard({
     const hpPct = e.hp / e.maxHp;
     const hpW = def.boss ? 70 : 44;
     return (
-      <g key={e.id} transform={`translate(${ep.x} ${ep.y})`} style={{ filter: e.flash > 0 ? 'brightness(1.5) saturate(0.6)' : undefined }}>
+      <g key={e.id} transform={`translate(${ep.x} ${ep.y})`} style={{ filter: e.flash > 0 ? 'brightness(1.6) saturate(0.5)' : `drop-shadow(0 ${def.boss ? 6 : 4}px ${def.boss ? 6 : 4}px rgba(60,40,32,0.45))` }}>
         <g transform={`translate(${-size / 2} ${-size / 2})`}>
           <Comp size={size} />
         </g>
@@ -39,19 +40,60 @@ export default function GameBoard({
     const def = TOWER_DEFS[tw.type];
     const Comp = def.Comp;
     const cx = tw.gx * T + T / 2, cy = tw.gy * T + T / 2;
-    const sz = T * (tw.shootPulse > 0 ? 1.04 : 1.0);
+    const lvl = tw.level;
+    // Size scales subtly by level; shoot-pulse is more punchy now
+    const lvlScale = 1 + (lvl - 1) * 0.06;
+    const sz = T * (tw.shootPulse > 0 ? lvlScale * 1.10 : lvlScale * 1.0);
     const isSelected = world.selectedPlacedTower === tw.id;
+
     return (
       <g key={tw.id} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onTowerClick(tw.id); }}>
-        <ellipse cx={cx} cy={cy + 8} rx={T * 0.42} ry={T * 0.18} fill="rgba(90,62,54,0.12)" />
-        <circle cx={cx} cy={cy} r={T * 0.42} fill={isSelected ? 'rgba(255, 234, 208, 0.95)' : 'white'} opacity={isSelected ? 1 : 0.5} stroke={isSelected ? 'var(--pink-deep)' : 'transparent'} strokeWidth="3" />
-        <g transform={`translate(${cx - sz / 2} ${cy - sz / 2 - 4})`}>
+        {/* Soft ground contact shadow (extended for 3D depth) */}
+        <ellipse cx={cx} cy={cy + 14} rx={T * 0.46} ry={T * 0.16} fill="rgba(60,40,32,0.30)" filter="url(#sd-blur)" />
+        <ellipse cx={cx} cy={cy + 10} rx={T * 0.40} ry={T * 0.12} fill="rgba(60,40,32,0.18)" />
+
+        {/* Base pad with radial gradient (dome look) */}
+        <circle cx={cx} cy={cy} r={T * 0.42} fill="url(#sd-baseGrad)" />
+        {/* Top highlight on base pad */}
+        <ellipse cx={cx - 6} cy={cy - 10} rx={T * 0.22} ry={T * 0.08} fill="white" opacity="0.45" />
+
+        {/* L2: silver ring */}
+        {lvl === 2 && (
+          <circle cx={cx} cy={cy} r={T * 0.46} fill="none" stroke="url(#sd-silver)" strokeWidth="3" />
+        )}
+        {/* L3: gold rainbow ring + 4 orbiting sparkles */}
+        {lvl === 3 && (
+          <>
+            <circle cx={cx} cy={cy} r={T * 0.50} fill="none" stroke="url(#sd-rainbow)" strokeWidth="4" opacity="0.95" />
+            <circle cx={cx} cy={cy} r={T * 0.54} fill="none" stroke="#FFE066" strokeWidth="1.5" opacity="0.5" strokeDasharray="6 4" />
+            <g transform={`translate(${cx} ${cy})`}>
+              <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4s" repeatCount="indefinite" additive="sum" />
+              <circle cx="0" cy={-T * 0.55} r="3.5" fill="#F8E060" />
+              <circle cx={T * 0.55} cy="0" r="3.5" fill="#FFB5C5" />
+              <circle cx="0" cy={T * 0.55} r="3.5" fill="#A8D9C0" />
+              <circle cx={-T * 0.55} cy="0" r="3.5" fill="#B79CD1" />
+            </g>
+          </>
+        )}
+
+        {/* Selection ring */}
+        {isSelected && (
+          <circle cx={cx} cy={cy} r={T * 0.48} fill="none" stroke="var(--pink-deep)" strokeWidth="3" />
+        )}
+
+        {/* The dessert sprite */}
+        <g
+          transform={`translate(${cx - sz / 2} ${cy - sz / 2 - 4})`}
+          style={{ filter: tw.shootPulse > 0 ? 'brightness(1.25)' : 'drop-shadow(0 5px 4px rgba(60,40,32,0.35))' }}
+        >
           <Comp size={sz} />
         </g>
-        {tw.level > 1 && (
-          <g transform={`translate(${cx + T * 0.22} ${cy - T * 0.22})`}>
-            <circle r="11" fill="white" stroke="#F58CA6" strokeWidth="2" />
-            <text x="0" y="3.5" textAnchor="middle" fontSize="11" fontWeight="700" fill="#F58CA6" fontFamily="Fredoka, sans-serif">{tw.level}</text>
+
+        {/* Level badge */}
+        {lvl > 1 && (
+          <g transform={`translate(${cx + T * 0.26} ${cy - T * 0.26})`}>
+            <circle r="12" fill={lvl === 3 ? '#F8E060' : '#E8E0D0'} stroke="#F58CA6" strokeWidth="2" />
+            <text x="0" y="4" textAnchor="middle" fontSize="12" fontWeight="800" fill={lvl === 3 ? '#8B5E3C' : '#5A3E36'} fontFamily="Fredoka, sans-serif">{lvl}</text>
           </g>
         )}
       </g>
@@ -63,9 +105,45 @@ export default function GameBoard({
     const y = p.fromY + (p.toY - p.fromY) * p.t;
     return (
       <g key={p.id}>
-        <line x1={p.fromX} y1={p.fromY} x2={x} y2={y} stroke={p.color} strokeWidth="2" strokeDasharray="3 3" opacity="0.4" />
+        <line x1={p.fromX} y1={p.fromY} x2={x} y2={y} stroke={p.color} strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
+        <circle cx={x} cy={y} r={p.size + 3} fill={p.color} opacity="0.35" />
         <circle cx={x} cy={y} r={p.size} fill={p.color} />
-        <circle cx={x} cy={y} r={p.size - 2} fill="white" opacity="0.4" />
+        <circle cx={x - 1.5} cy={y - 1.5} r={p.size - 2.5} fill="white" opacity="0.55" />
+      </g>
+    );
+  });
+
+  // Muzzle flashes
+  const flashEls = world.flashes.map(f => {
+    const pt = f.t / f.dur;
+    const r = 18 * (1 + pt * 1.3);
+    return (
+      <g key={f.id}>
+        <circle cx={f.x} cy={f.y} r={r} fill={f.color} opacity={(1 - pt) * 0.55} />
+        <circle cx={f.x} cy={f.y} r={r * 0.55} fill="white" opacity={(1 - pt) * 0.85} />
+      </g>
+    );
+  });
+
+  // Hit-impact particle bursts
+  const burstEls = world.bursts.map(b => {
+    const pt = b.t / b.dur;
+    return (
+      <g key={b.id}>
+        {b.particles.map((p, i) => {
+          const dx = Math.cos(p.angle) * p.speed * pt;
+          const dy = Math.sin(p.angle) * p.speed * pt + 28 * pt * pt;
+          return (
+            <circle
+              key={i}
+              cx={b.x + dx}
+              cy={b.y + dy}
+              r={p.r * (1 - pt * 0.4)}
+              fill={p.color}
+              opacity={1 - pt}
+            />
+          );
+        })}
       </g>
     );
   });
@@ -89,13 +167,16 @@ export default function GameBoard({
   })();
 
   const ghostEl = ghost && (() => {
-    const def = TOWER_DEFS[ghost.type];
+    const isWall = ghost.kind === 'wall';
+    const def = isWall ? WALL_DEFS.wall : TOWER_DEFS[ghost.type];
     const Comp = def.Comp;
     const cx = ghost.gx * T + T / 2, cy = ghost.gy * T + T / 2;
     const valid = ghost.valid;
     return (
       <g style={{ pointerEvents: 'none' }}>
-        <circle cx={cx} cy={cy} r={def.range * T} fill={valid ? 'rgba(143,207,174,0.18)' : 'rgba(245,140,166,0.18)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="8 6" />
+        {!isWall && (
+          <circle cx={cx} cy={cy} r={def.range * T} fill={valid ? 'rgba(143,207,174,0.18)' : 'rgba(245,140,166,0.18)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="8 6" />
+        )}
         <rect x={ghost.gx * T + 4} y={ghost.gy * T + 4} width={T - 8} height={T - 8} rx="14" fill={valid ? 'rgba(143,207,174,0.22)' : 'rgba(245,140,166,0.22)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="6 4" />
         <g transform={`translate(${cx - T / 2} ${cy - T / 2 - 4})`} opacity="0.7">
           <Comp size={T} />
@@ -103,6 +184,48 @@ export default function GameBoard({
       </g>
     );
   })();
+
+  const wallEls = world.walls.map(wl => {
+    const cx = wl.gx * T + T / 2, cy = wl.gy * T + T / 2;
+    const sz = T * 0.85;
+    const hpPct = wl.hp / wl.maxHp;
+    const flashFilter = wl.flash > 0 ? 'brightness(1.5) saturate(0.5)' : 'drop-shadow(0 4px 4px rgba(60,40,32,0.4))';
+    return (
+      <g key={`wl${wl.id}`} style={{ filter: flashFilter }}>
+        <g transform={`translate(${cx - sz / 2} ${cy - sz / 2 - 2})`}>
+          <NougatWall size={sz} />
+        </g>
+        <g transform={`translate(${cx - 22} ${cy - sz / 2 - 10})`}>
+          <rect x="0" y="0" width="44" height="6" rx="3" fill="white" stroke="#E5DCC5" strokeWidth="1" />
+          <rect x="2" y="1.5" width={40 * hpPct} height="3" rx="1.5"
+                fill={hpPct > 0.5 ? '#8FCFAE' : hpPct > 0.25 ? '#F8E060' : '#F58CA6'} />
+        </g>
+      </g>
+    );
+  });
+
+  const obstacleEls = world.obstacles.map(ob => {
+    const cx = ob.gx * T + T / 2, cy = ob.gy * T + T / 2;
+    const sz = T * 0.92;
+    return (
+      <g
+        key={`ob${ob.id}`}
+        style={{ cursor: 'pointer', filter: 'drop-shadow(0 5px 4px rgba(60,40,32,0.45))' }}
+        onClick={(e) => { e.stopPropagation(); onObstacleClick(ob.id); }}
+      >
+        <g transform={`translate(${cx - sz / 2} ${cy - sz / 2})`}>
+          <Boulder size={sz} />
+        </g>
+        {/* Cost badge */}
+        <g transform={`translate(${cx + T * 0.28} ${cy - T * 0.30})`}>
+          <rect x="-18" y="-10" width="36" height="20" rx="10" fill="white" stroke="#F58CA6" strokeWidth="2" />
+          <text x="-3" y="4" textAnchor="middle" fontSize="11" fontWeight="800" fill="#5A3E36" fontFamily="Fredoka, sans-serif">{ob.cost}</text>
+          <circle cx="9" cy="0" r="6" fill="#FFD9A0" />
+          <text x="9" y="3" textAnchor="middle" fontSize="7" fontWeight="800" fill="#8B5E3C" fontFamily="Fredoka, sans-serif">糖</text>
+        </g>
+      </g>
+    );
+  });
 
   const bgPrimary = theme?.bgPrimary || '#C4E4D4';
   const bgSecondary = theme?.bgSecondary || '#D4ECDD';
@@ -132,6 +255,29 @@ export default function GameBoard({
           <circle cx={T * 0.2} cy={T * 0.6} r="2" fill="#F8E060" opacity="0.55" />
           <circle cx={T * 0.8} cy={T * 0.85} r="3" fill="#A8D9C0" opacity="0.45" />
         </pattern>
+        {/* Tower base radial gradient — dome look */}
+        <radialGradient id="sd-baseGrad" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
+          <stop offset="60%" stopColor="#FFF1DC" stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#E8C9A8" stopOpacity="0.6" />
+        </radialGradient>
+        {/* Silver ring */}
+        <linearGradient id="sd-silver" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#E8E0D0" />
+          <stop offset="50%" stopColor="#FFFFFF" />
+          <stop offset="100%" stopColor="#B89A87" />
+        </linearGradient>
+        {/* Rainbow ring (L3) */}
+        <linearGradient id="sd-rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="#F58CA6" />
+          <stop offset="25%"  stopColor="#F8E060" />
+          <stop offset="50%"  stopColor="#8FCFAE" />
+          <stop offset="75%"  stopColor="#B79CD1" />
+          <stop offset="100%" stopColor="#F58CA6" />
+        </linearGradient>
+        <filter id="sd-blur" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.4" />
+        </filter>
       </defs>
 
       {Array.from({ length: ROWS }, (_, gy) =>
@@ -185,10 +331,14 @@ export default function GameBoard({
       })()}
 
       {selectedRange}
+      {obstacleEls}
+      {wallEls}
       {towerEls}
       {ghostEl}
       {enemyEls}
       {projectileEls}
+      {flashEls}
+      {burstEls}
       {floatEls}
     </svg>
   );

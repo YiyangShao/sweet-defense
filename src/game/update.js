@@ -1,7 +1,7 @@
-import { T, ENEMY_DEFS } from './constants.js';
+import { T, ENEMY_DEFS, PREP_DURATION, ENGAGE_DIST } from './constants.js';
 import { PATH, posAt } from './path.js';
 import { towerStats } from './world.js';
-import { PREP_DURATION } from './constants.js';
+import { play, shootSoundFor } from './sfx.js';
 
 function startWave(w, idx) {
   const wave = w.level.waves[idx];
@@ -15,6 +15,22 @@ function startWave(w, idx) {
   w.spawnQueue = queue;
   w.waveState = 'spawning';
   w.waveTimer = 0;
+  play('wave');
+}
+
+function spawnFlash(w, x, y, color) {
+  w.flashes.push({ id: w.nextId++, x, y, color, t: 0, dur: 0.14 });
+}
+
+function spawnBurst(w, x, y, color, count = 6, big = false) {
+  const particles = [];
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+    const speed = (big ? 70 : 45) + Math.random() * 30;
+    const colors = [color, '#FFE5EC', '#FFF1C4'];
+    particles.push({ angle, speed, color: colors[i % colors.length], r: big ? 4 : 3 });
+  }
+  w.bursts.push({ id: w.nextId++, x, y, t: 0, dur: 0.40, particles });
 }
 
 function applyDamage(w, enemy, dmg, opts) {
@@ -22,7 +38,7 @@ function applyDamage(w, enemy, dmg, opts) {
   const ep = posAt(enemy.dist);
   if (def.dodge && Math.random() < def.dodge) {
     w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 22, text: '闪避', color: '#B79CD1', t: 0 });
-    return;
+    return false;
   }
   enemy.hp -= dmg;
   enemy.flash = 0.13;
@@ -34,6 +50,7 @@ function applyDamage(w, enemy, dmg, opts) {
   if (opts && opts.stun && !def.boss) {
     enemy.stunUntil = w.elapsed + opts.stun;
   }
+  return true;
 }
 
 export function update(w, rawDt) {
@@ -67,22 +84,58 @@ export function update(w, rawDt) {
     if (!w.spawnQueue.length) w.waveState = 'active';
   }
 
+  // Wall collision: enemies stop in front of the next wall, attack it.
+  const sortedWalls = w.walls.length
+    ? w.walls.slice().sort((a, b) => a.dist - b.dist)
+    : null;
+
   for (const e of w.enemies) {
     if (e.dead || e.hp <= 0) continue;
-    const slow = w.elapsed < e.slowUntil ? e.slowFactor : 1;
-    const stunned = w.elapsed < e.stunUntil;
-    if (!stunned) {
-      e.dist += e.baseSpeed * T * slow * dt;
-    }
     if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
+    const stunned = w.elapsed < e.stunUntil;
+    if (stunned) continue;
+
+    const def = ENEMY_DEFS[e.type];
+    const slow = w.elapsed < e.slowUntil ? e.slowFactor : 1;
+    let newDist = e.dist + def.speed * T * slow * dt;
+
+    if (sortedWalls) {
+      const nextWall = sortedWalls.find(wl => !wl.dead && wl.dist > e.dist - 4);
+      if (nextWall) {
+        const stopDist = nextWall.dist - ENGAGE_DIST;
+        if (newDist >= stopDist) {
+          newDist = Math.min(newDist, stopDist);
+          nextWall.hp -= def.wallDps * dt;
+          nextWall.flash = 0.12;
+          if (nextWall.hp <= 0) {
+            nextWall.dead = true;
+            const wp = posAt(nextWall.dist);
+            spawnBurst(w, wp.x, wp.y, '#F5DEB3', 12, true);
+            play('splash');
+          }
+        }
+      }
+    }
+
+    e.dist = newDist;
+
     if (e.dist >= PATH.total) {
-      const def = ENEMY_DEFS[e.type];
       w.hp -= def.damage;
       if (def.steal) w.sugar = Math.max(0, w.sugar - def.steal);
-      e.dead = true; e.reachedCastle = true;
-      if (w.hp <= 0) { w.hp = 0; w.finished = 'lose'; }
+      e.dead = true;
+      e.reachedCastle = true;
+      if (w.hp <= 0) {
+        w.hp = 0;
+        w.finished = 'lose';
+        play('lose');
+      }
     }
   }
+
+  for (const wl of w.walls) {
+    if (wl.flash > 0) wl.flash = Math.max(0, wl.flash - dt);
+  }
+  w.walls = w.walls.filter(wl => !wl.dead);
 
   for (const tw of w.towers) {
     const stats = towerStats(tw);
@@ -117,9 +170,15 @@ export function update(w, rawDt) {
         splash: stats.splash,
         slow: stats.slow,
         stun: stats.stun,
+        towerType: tw.type,
       });
       tw.cooldown = stats.cd;
-      tw.shootPulse = 0.18;
+      tw.shootPulse = 0.20;
+      spawnFlash(w, tx, ty, stats.proj);
+      // Throttle shoot SFX so high-frequency towers don't drown the mix
+      if (Math.random() < (tw.type === 'choco' ? 0.35 : tw.type === 'cupcake' ? 0.7 : 1)) {
+        play(shootSoundFor(tw.type));
+      }
     }
   }
 
@@ -128,10 +187,11 @@ export function update(w, rawDt) {
     if (p.t >= 1) {
       const target = w.enemies.find(e => e.id === p.targetId);
       let hitX = p.toX, hitY = p.toY;
+      let landed = false;
       if (target && !target.dead) {
         const ep = posAt(target.dist);
         hitX = ep.x; hitY = ep.y;
-        applyDamage(w, target, p.dmg, p);
+        landed = applyDamage(w, target, p.dmg, p);
       }
       if (p.splash) {
         const r = p.splash * T;
@@ -142,6 +202,11 @@ export function update(w, rawDt) {
           const d = Math.hypot(ep.x - hitX, ep.y - hitY);
           if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
         }
+        spawnBurst(w, hitX, hitY, p.color, 10, true);
+        play('splash');
+      } else {
+        spawnBurst(w, hitX, hitY, p.color, 5, false);
+        if (landed) play('hit');
       }
       p.dead = true;
     }
@@ -156,6 +221,9 @@ export function update(w, rawDt) {
         w.sugar += def.reward;
         w.sugarEarned += def.reward;
         w.enemiesKilled += 1;
+        const ep = posAt(e.dist);
+        spawnBurst(w, ep.x, ep.y, '#F8E060', def.boss ? 16 : 7, def.boss);
+        play(def.boss ? 'killBoss' : 'kill');
       }
     }
   }
@@ -163,16 +231,22 @@ export function update(w, rawDt) {
 
   for (const f of w.floats) f.t += dt;
   w.floats = w.floats.filter(f => f.t < 0.7);
+  for (const fl of w.flashes) fl.t += dt;
+  w.flashes = w.flashes.filter(fl => fl.t < fl.dur);
+  for (const b of w.bursts) b.t += dt;
+  w.bursts = w.bursts.filter(b => b.t < b.dur);
 
   if (w.waveState === 'active' && w.spawnQueue.length === 0 && w.enemies.length === 0) {
     if (w.waveIdx + 1 >= w.level.waves.length) {
       w.finished = 'win';
+      play('win');
     } else {
       w.waveIdx += 1;
       w.waveState = 'preparing';
       w.waveTimer = -PREP_DURATION;
       w.sugar += 25;
       w.sugarEarned += 25;
+      play('coin');
     }
   }
 }
