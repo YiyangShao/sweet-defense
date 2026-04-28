@@ -1,5 +1,5 @@
-import { TOWER_DEFS, PREP_DURATION, OBSTACLE_HP, OBSTACLE_REWARD } from './constants.js';
-import { distAtCell } from './path.js';
+import { TOWER_DEFS, PREP_DURATION, OBSTACLE_HP, OBSTACLE_REWARD, T } from './constants.js';
+import { buildPath } from './path.js';
 
 export function initWorld(level) {
   let id = 1;
@@ -9,8 +9,10 @@ export function initWorld(level) {
     reward: OBSTACLE_REWARD,
     flash: 0,
   }));
+  const path = buildPath(level.pathGrid, T);
   return {
     level,
+    path,               // per-level path object owns posAt / isPathCell / etc.
     hp: level.startHp,
     sugar: level.startSugar,
     waveIdx: 0,
@@ -29,6 +31,7 @@ export function initWorld(level) {
     selectedTowerType: null,
     selectedPlacedTower: null,
     focus: null,        // {kind: 'enemy'|'obstacle', id} — manual focus-fire target
+    events: [],         // accumulated per-tick gameplay events for downstream consumers
     nextId: id,
     enemiesKilled: 0,
     sugarEarned: 0,
@@ -38,7 +41,7 @@ export function initWorld(level) {
 }
 
 export function placeWall(w, def, gx, gy) {
-  const dist = distAtCell(gx, gy);
+  const dist = w.path.distAtCell(gx, gy);
   return {
     id: w.nextId++,
     gx, gy,

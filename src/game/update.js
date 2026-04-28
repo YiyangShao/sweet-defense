@@ -1,7 +1,10 @@
 import { T, ENEMY_DEFS, PREP_DURATION, ENGAGE_DIST } from './constants.js';
-import { PATH, posAt } from './path.js';
 import { towerStats } from './world.js';
 import { play, shootSoundFor } from './sfx.js';
+
+function emit(w, type, payload = {}) {
+  w.events.push({ type, ...payload });
+}
 
 function startWave(w, idx) {
   const wave = w.level.waves[idx];
@@ -15,6 +18,7 @@ function startWave(w, idx) {
   w.spawnQueue = queue;
   w.waveState = 'spawning';
   w.waveTimer = 0;
+  emit(w, 'wave_start', { wave: idx + 1 });
   play('wave');
 }
 
@@ -35,9 +39,10 @@ function spawnBurst(w, x, y, color, count = 6, big = false) {
 
 function applyDamage(w, enemy, dmg, opts) {
   const def = ENEMY_DEFS[enemy.type];
-  const ep = posAt(enemy.dist);
+  const ep = w.path.posAt(enemy.dist);
   if (def.dodge && Math.random() < def.dodge) {
     w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 22, text: '闪避', color: '#B79CD1', t: 0 });
+    emit(w, 'enemy_dodged', { enemy_type: enemy.type });
     return false;
   }
   enemy.hp -= dmg;
@@ -54,6 +59,10 @@ function applyDamage(w, enemy, dmg, opts) {
 }
 
 export function update(w, rawDt) {
+  // w.events accumulates across ticks; the consumer (e.g. achievements in
+  // Phase F) is responsible for draining it. Cap defensively to avoid
+  // unbounded growth if no consumer is wired up yet.
+  if (w.events.length > 256) w.events.splice(0, w.events.length - 256);
   if (w.finished) return;
   if (w.speed === 0) return;
   const dt = rawDt * w.speed;
@@ -109,8 +118,9 @@ export function update(w, rawDt) {
           nextWall.flash = 0.12;
           if (nextWall.hp <= 0) {
             nextWall.dead = true;
-            const wp = posAt(nextWall.dist);
+            const wp = w.path.posAt(nextWall.dist);
             spawnBurst(w, wp.x, wp.y, '#F5DEB3', 12, true);
+            emit(w, 'wall_destroyed', { gx: nextWall.gx, gy: nextWall.gy });
             play('splash');
           }
         }
@@ -119,14 +129,16 @@ export function update(w, rawDt) {
 
     e.dist = newDist;
 
-    if (e.dist >= PATH.total) {
+    if (e.dist >= w.path.total) {
       w.hp -= def.damage;
       if (def.steal) w.sugar = Math.max(0, w.sugar - def.steal);
       e.dead = true;
       e.reachedCastle = true;
+      emit(w, 'enemy_reached_castle', { enemy_type: e.type });
       if (w.hp <= 0) {
         w.hp = 0;
         w.finished = 'lose';
+        emit(w, 'level_lost');
         play('lose');
       }
     }
@@ -144,7 +156,7 @@ export function update(w, rawDt) {
   if (w.focus) {
     if (w.focus.kind === 'enemy') {
       const ent = w.enemies.find(e => e.id === w.focus.id && !e.dead && e.hp > 0);
-      if (ent) { focusTarget = ent; focusKind = 'enemy'; focusPos = posAt(ent.dist); }
+      if (ent) { focusTarget = ent; focusKind = 'enemy'; focusPos = w.path.posAt(ent.dist); }
     } else if (w.focus.kind === 'obstacle') {
       const ob = w.obstacles.find(o => o.id === w.focus.id);
       if (ob) { focusTarget = ob; focusKind = 'obstacle'; focusPos = { x: ob.gx * T + T / 2, y: ob.gy * T + T / 2 }; }
@@ -175,13 +187,13 @@ export function update(w, rawDt) {
       let best = null, bestProgress = -1;
       for (const e of w.enemies) {
         if (e.dead || e.hp <= 0) continue;
-        const ep = posAt(e.dist);
+        const ep = w.path.posAt(e.dist);
         const d = Math.hypot(ep.x - tx, ep.y - ty);
         if (d <= rangePx && e.dist > bestProgress) {
           best = e; bestProgress = e.dist;
         }
       }
-      if (best) { chosen = best; chosenKind = 'enemy'; chosenPos = posAt(best.dist); }
+      if (best) { chosen = best; chosenKind = 'enemy'; chosenPos = w.path.posAt(best.dist); }
     }
 
     if (chosen) {
@@ -221,7 +233,7 @@ export function update(w, rawDt) {
     if (p.targetKind === 'enemy') {
       const target = w.enemies.find(e => e.id === p.targetId);
       if (target && !target.dead) {
-        const ep = posAt(target.dist);
+        const ep = w.path.posAt(target.dist);
         hitX = ep.x; hitY = ep.y;
         landed = applyDamage(w, target, p.dmg, p);
         primaryEnemyId = target.id;
@@ -244,6 +256,7 @@ export function update(w, rawDt) {
           if (w.focus && w.focus.kind === 'obstacle' && w.focus.id === ob.id) {
             w.focus = null;
           }
+          emit(w, 'obstacle_destroyed', { gx: ob.gx, gy: ob.gy, reward: ob.reward });
           play('coin');
         }
       }
@@ -254,7 +267,7 @@ export function update(w, rawDt) {
       for (const e of w.enemies) {
         if (e.dead || e.hp <= 0) continue;
         if (primaryEnemyId != null && e.id === primaryEnemyId) continue;
-        const ep = posAt(e.dist);
+        const ep = w.path.posAt(e.dist);
         const d = Math.hypot(ep.x - hitX, ep.y - hitY);
         if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
       }
@@ -276,8 +289,9 @@ export function update(w, rawDt) {
         w.sugar += def.reward;
         w.sugarEarned += def.reward;
         w.enemiesKilled += 1;
-        const ep = posAt(e.dist);
+        const ep = w.path.posAt(e.dist);
         spawnBurst(w, ep.x, ep.y, '#F8E060', def.boss ? 16 : 7, def.boss);
+        emit(w, 'enemy_killed', { enemy_type: e.type, boss: !!def.boss, reward: def.reward });
         play(def.boss ? 'killBoss' : 'kill');
       }
     }
@@ -295,8 +309,10 @@ export function update(w, rawDt) {
   w.bursts = w.bursts.filter(b => b.t < b.dur);
 
   if (w.waveState === 'active' && w.spawnQueue.length === 0 && w.enemies.length === 0) {
+    emit(w, 'wave_cleared', { wave: w.waveIdx + 1 });
     if (w.waveIdx + 1 >= w.level.waves.length) {
       w.finished = 'win';
+      emit(w, 'level_won');
       play('win');
     } else {
       w.waveIdx += 1;

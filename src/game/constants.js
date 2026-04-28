@@ -10,8 +10,9 @@ export const H = ROWS * T;
 
 export const PREP_DURATION = 5;
 
-// Default S-shape path used by every level (for now)
-export const PATH_GRID = [
+// Default S-shape path. Phase A clones this into every level; Phase D will
+// replace each level's `pathGrid` with a unique hand-designed shape.
+export const DEFAULT_PATH_GRID = [
   [0,1],[1,1],[2,1],[3,1],[3,2],[3,3],[3,4],
   [4,4],[5,4],[6,4],[6,3],[6,2],[7,2],[8,2],
   [9,2],[9,3],[9,4],[9,5],[9,6],[10,6],[11,6],
@@ -62,6 +63,8 @@ export const LEVELS = [
     id: 1, name: '糖霜花园', themeKey: 'pastel', accent: 'var(--pink)', accentDeep: 'var(--pink-deep)',
     startSugar: 250, startHp: 20,
     bgPrimary: '#C4E4D4', bgSecondary: '#D4ECDD',
+    pathGrid: DEFAULT_PATH_GRID,
+    availableTowers: ['cookie','cupcake','donut','macaron','icecream','lollipop','wall'],
     obstacles: [[1,3],[5,1],[10,3]],
     waves: [
       [ { type: 'mouse', count: 8, interval: 0.85, delay: 0 } ],
@@ -85,6 +88,9 @@ export const LEVELS = [
     id: 2, name: '饼干森林', themeKey: 'peach', accent: 'var(--peach)', accentDeep: 'var(--peach-deep)',
     startSugar: 250, startHp: 20,
     bgPrimary: '#E8D5B0', bgSecondary: '#F0DFB8',
+    pathGrid: DEFAULT_PATH_GRID,
+    // banana planned for Phase C — using choco placeholder
+    availableTowers: ['cookie','cupcake','macaron','donut','lollipop','choco','wall'],
     obstacles: [[1,5],[4,7],[8,1],[12,3]],
     waves: [
       [ { type: 'mouse', count: 10, interval: 0.65, delay: 0 } ],
@@ -108,6 +114,9 @@ export const LEVELS = [
     id: 3, name: '果冻沼泽', themeKey: 'mint', accent: 'var(--mint)', accentDeep: 'var(--mint-deep)',
     startSugar: 280, startHp: 20,
     bgPrimary: '#B0DFC8', bgSecondary: '#C0E5D2',
+    pathGrid: DEFAULT_PATH_GRID,
+    // lemon planned for Phase C — using macaron placeholder
+    availableTowers: ['cookie','cupcake','icecream','donut','lollipop','macaron','wall'],
     obstacles: [[2,3],[5,7],[8,5],[11,3]],
     waves: [
       [ { type: 'mouse', count: 12, interval: 0.55, delay: 0 } ],
@@ -133,6 +142,9 @@ export const LEVELS = [
     id: 4, name: '棉花糖云海', themeKey: 'lavender', accent: 'var(--lavender)', accentDeep: 'var(--lavender-deep)',
     startSugar: 280, startHp: 20,
     bgPrimary: '#D4C5E0', bgSecondary: '#DECEE8',
+    pathGrid: DEFAULT_PATH_GRID,
+    // strawberry planned for Phase C — using cake placeholder
+    availableTowers: ['cookie','cupcake','macaron','choco','lollipop','cake','wall'],
     obstacles: [[1,5],[3,7],[6,5],[10,1],[13,3]],
     waves: [
       [ { type: 'pigeon', count: 8, interval: 0.55, delay: 0 } ],
@@ -159,6 +171,9 @@ export const LEVELS = [
     id: 5, name: '巧克力工厂', themeKey: 'choco', accent: 'var(--choco)', accentDeep: '#8B6F5C',
     startSugar: 300, startHp: 20,
     bgPrimary: '#C8A684', bgSecondary: '#D4B896',
+    pathGrid: DEFAULT_PATH_GRID,
+    // banana planned for Phase C — using macaron placeholder
+    availableTowers: ['cookie','donut','choco','icecream','cake','macaron','wall'],
     obstacles: [[1,3],[4,1],[5,7],[8,7],[11,3],[14,7]],
     waves: [
       [ { type: 'hedgehog', count: 5, interval: 1.50, delay: 0 } ],
@@ -184,6 +199,8 @@ export const LEVELS = [
     id: 6, name: '冰淇淋雪山', themeKey: 'snow', accent: 'var(--mint)', accentDeep: 'var(--mint-deep)',
     startSugar: 320, startHp: 20,
     bgPrimary: '#D8E8E8', bgSecondary: '#E5F0F0',
+    pathGrid: DEFAULT_PATH_GRID,
+    availableTowers: ['cookie','cupcake','macaron','donut','choco','cake','wall'],
     obstacles: [[1,5],[2,7],[5,1],[8,5],[10,1],[13,7]],
     waves: [
       [ { type: 'mouse', count: 16, interval: 0.40, delay: 0 } ],

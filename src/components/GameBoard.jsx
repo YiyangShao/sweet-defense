@@ -1,6 +1,5 @@
-import { TOWER_DEFS, ENEMY_DEFS, WALL_DEFS, T, COLS, ROWS, W, H, PATH_GRID } from '../game/constants.js';
+import { TOWER_DEFS, ENEMY_DEFS, WALL_DEFS, T, COLS, ROWS, W, H } from '../game/constants.js';
 import { Boulder, NougatWall } from '../art/structures.jsx';
-import { PATH, posAt } from '../game/path.js';
 import { towerStats } from '../game/world.js';
 
 export default function GameBoard({
@@ -10,7 +9,7 @@ export default function GameBoard({
   onMouseMove, onMouseLeave,
 }) {
   const enemyEls = world.enemies.map(e => {
-    const ep = posAt(e.dist);
+    const ep = world.path.posAt(e.dist);
     const def = ENEMY_DEFS[e.type];
     const Comp = def.Comp;
     const size = def.boss ? T * 1.2 : T * 0.78;
@@ -163,7 +162,7 @@ export default function GameBoard({
     let pos = null;
     if (f.kind === 'enemy') {
       const ent = world.enemies.find(e => e.id === f.id && !e.dead);
-      if (ent) pos = posAt(ent.dist);
+      if (ent) pos = world.path.posAt(ent.dist);
     } else if (f.kind === 'obstacle') {
       const ob = world.obstacles.find(o => o.id === f.id);
       if (ob) pos = { x: ob.gx * T + T / 2, y: ob.gy * T + T / 2 };
@@ -339,10 +338,10 @@ export default function GameBoard({
         <line key={`h${i}`} x1="0" y1={i * T} x2={W} y2={i * T} stroke="#A8D9C0" strokeWidth="0.5" opacity="0.4" />
       ))}
 
-      <polyline points={PATH.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#E0BC8C" strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points={PATH.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F5DEB3" strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#E0BC8C" strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F5DEB3" strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" />
 
-      {PATH_GRID.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
+      {world.path.grid.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
         const cx = gx * T + T / 2, cy = gy * T + T / 2;
         const colors = ['#FFB5C5', '#7BC4A0', '#F8E060', '#B79CD1', '#F5B872'];
         return (
@@ -354,7 +353,7 @@ export default function GameBoard({
       })}
 
       {(() => {
-        const p = PATH.points[0];
+        const p = world.path.points[0];
         return (
           <g>
             <circle cx={p.x - 18} cy={p.y} r="22" fill="#8FCFAE" stroke="white" strokeWidth="3" />
@@ -364,7 +363,7 @@ export default function GameBoard({
       })()}
 
       {(() => {
-        const p = PATH.points[PATH.points.length - 1];
+        const p = world.path.points[world.path.points.length - 1];
         return (
           <g transform={`translate(${p.x + T / 2 - 50} ${p.y - 50})`}>
             <rect x="0" y="20" width="46" height="50" rx="4" fill="#FFE5EC" />

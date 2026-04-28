@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { TOWER_DEFS, WALL_DEFS, T, COLS, ROWS } from '../game/constants.js';
-import { isPathCell, inBounds } from '../game/path.js';
+import { inBounds } from '../game/path.js';
 import { initWorld, upgradeCost, sellRefund, placeWall } from '../game/world.js';
 import { update } from '../game/update.js';
 import { play, isMuted, toggleMute } from '../game/sfx.js';
@@ -105,7 +105,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
     if (!c) return;
     if (w.selectedTowerType === 'wall') {
       const def = WALL_DEFS.wall;
-      if (!isPathCell(c.gx, c.gy) || wallAt(c.gx, c.gy)) {
+      if (!w.path.isPathCell(c.gx, c.gy) || wallAt(c.gx, c.gy)) {
         play('deny');
         return;
       }
@@ -116,13 +116,14 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       w.sugar -= def.cost;
       w.walls.push(placeWall(w, def, c.gx, c.gy));
       if (!e.shiftKey) w.selectedTowerType = null;
+      w.events.push({ type: 'wall_placed', gx: c.gx, gy: c.gy });
       play('place');
       forceTick(t => t + 1);
       return;
     }
     if (w.selectedTowerType) {
       const def = TOWER_DEFS[w.selectedTowerType];
-      if (isPathCell(c.gx, c.gy) || towerAt(c.gx, c.gy) || obstacleAt(c.gx, c.gy)) {
+      if (w.path.isPathCell(c.gx, c.gy) || towerAt(c.gx, c.gy) || obstacleAt(c.gx, c.gy)) {
         play('deny');
         return;
       }
@@ -140,6 +141,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
         cooldown: 0,
         shootPulse: 0,
       });
+      w.events.push({ type: 'tower_placed', tower_type: w.selectedTowerType, gx: c.gx, gy: c.gy });
       if (!e.shiftKey) w.selectedTowerType = null;
       play('place');
       forceTick(t => t + 1);
@@ -214,6 +216,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
     w.sugar -= cost;
     tw.level += 1;
     tw.invested += cost;
+    w.events.push({ type: 'tower_upgraded', tower_type: tw.type, new_level: tw.level });
     play('upgrade');
     forceTick(t => t + 1);
   };
@@ -222,6 +225,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
     const tw = w.towers.find(t => t.id === w.selectedPlacedTower);
     if (!tw) return;
     w.sugar += sellRefund(tw);
+    w.events.push({ type: 'tower_sold', tower_type: tw.type });
     w.towers = w.towers.filter(t => t.id !== tw.id);
     w.selectedPlacedTower = null;
     play('sell');
@@ -236,12 +240,12 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
   const ghost = (() => {
     if (!w.selectedTowerType || !hover) return null;
     if (w.selectedTowerType === 'wall') {
-      const valid = isPathCell(hover.gx, hover.gy)
+      const valid = w.path.isPathCell(hover.gx, hover.gy)
         && !wallAt(hover.gx, hover.gy)
         && w.sugar >= WALL_DEFS.wall.cost;
       return { kind: 'wall', type: 'wall', gx: hover.gx, gy: hover.gy, valid };
     }
-    const valid = !isPathCell(hover.gx, hover.gy)
+    const valid = !w.path.isPathCell(hover.gx, hover.gy)
       && !towerAt(hover.gx, hover.gy)
       && !obstacleAt(hover.gx, hover.gy)
       && w.sugar >= TOWER_DEFS[w.selectedTowerType].cost;
@@ -269,7 +273,12 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       </div>
       <HUD world={w} totalWaves={level.waves.length} onPause={onPause} onSpeed={onSpeed} onMenu={onMenu} muted={muted} onMute={onMute} />
       <WavePreview world={w} onEarlyStart={onEarlyStart} />
-      <TowerShop selected={w.selectedTowerType} sugar={w.sugar} onSelect={onShopSelect} />
+      <TowerShop
+        selected={w.selectedTowerType}
+        sugar={w.sugar}
+        onSelect={onShopSelect}
+        availableTowers={level.availableTowers}
+      />
       {selectedTw && (
         <TowerDetailModal
           tower={selectedTw}

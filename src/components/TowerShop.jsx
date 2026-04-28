@@ -1,15 +1,24 @@
-import { TOWER_DEFS, TOWER_ORDER, WALL_DEFS } from '../game/constants.js';
+import { TOWER_DEFS, WALL_DEFS } from '../game/constants.js';
 import { Sugar } from '../art/icons.jsx';
 
-export default function TowerShop({ selected, sugar, onSelect }) {
-  const items = [
-    ...TOWER_ORDER.map(type => ({ type, kind: 'tower', def: TOWER_DEFS[type] })),
-    { type: 'wall', kind: 'wall', def: WALL_DEFS.wall },
-  ];
+function resolveItem(type) {
+  if (TOWER_DEFS[type]) return { kind: 'tower', def: TOWER_DEFS[type] };
+  if (WALL_DEFS[type]) return { kind: 'wall', def: WALL_DEFS[type] };
+  return null;
+}
+
+export default function TowerShop({ selected, sugar, onSelect, availableTowers }) {
+  const items = (availableTowers || [])
+    .map(type => {
+      const r = resolveItem(type);
+      return r ? { type, ...r } : null;
+    })
+    .filter(Boolean);
+
   return (
     <div className="cute-card" style={{ position: 'absolute', left: 16, right: 16, bottom: 14, padding: 12, display: 'flex', gap: 10, alignItems: 'center', zIndex: 6 }}>
       <div className="font-display" style={{ writingMode: 'vertical-rl', fontSize: 13, color: 'var(--ink-soft)', padding: '4px 6px', letterSpacing: '0.2em' }}>甜点商店</div>
-      <div style={{ display: 'flex', gap: 7, flex: 1 }}>
+      <div style={{ display: 'flex', gap: 8, flex: 1 }}>
         {items.map(it => {
           const def = it.def;
           const Comp = def.Comp;
