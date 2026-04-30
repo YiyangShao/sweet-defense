@@ -1,6 +1,6 @@
 import { ENEMY_DEFS } from '../game/constants.js';
 
-const ORDER = ['mouse', 'rabbit', 'hedgehog', 'squirrel', 'raccoon', 'pigeon', 'fox', 'bear'];
+const ORDER = ['mouse', 'rabbit', 'hedgehog', 'squirrel', 'raccoon', 'pigeon', 'fox', 'healer', 'shielded', 'splitter', 'bear'];
 
 export default function Bestiary({ onBack }) {
   return (

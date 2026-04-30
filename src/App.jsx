@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LEVELS } from './game/constants.js';
+import { makeEndlessLevel, makeDailyLevel } from './game/modes.js';
+import { dailySeed } from './game/rng.js';
 import { play } from './game/sfx.js';
 import MainMenu from './screens/MainMenu.jsx';
 import LevelSelect from './screens/LevelSelect.jsx';
@@ -7,8 +9,31 @@ import Gameplay from './screens/Gameplay.jsx';
 import Victory from './screens/Victory.jsx';
 import Defeat from './screens/Defeat.jsx';
 import Bestiary from './screens/Bestiary.jsx';
+import Achievements from './screens/Achievements.jsx';
+import { loadAchievementState } from './game/achievements.js';
 
 const PROGRESS_KEY = 'sweet-defense-progress-v1';
+const ENDLESS_BEST_KEY = 'sd-endless-best-v1';
+const DAILY_BEST_KEY = 'sd-daily-best-v1';
+
+function loadEndlessBest() {
+  try { return parseInt(localStorage.getItem(ENDLESS_BEST_KEY) || '0', 10) || 0; } catch { return 0; }
+}
+function saveEndlessBest(score) {
+  try { localStorage.setItem(ENDLESS_BEST_KEY, String(score)); } catch {}
+}
+function loadDailyScores() {
+  try { return JSON.parse(localStorage.getItem(DAILY_BEST_KEY) || '{}'); } catch { return {}; }
+}
+function saveDailyScore(seed, score) {
+  try {
+    const scores = loadDailyScores();
+    if (!scores[seed] || score > scores[seed]) {
+      scores[seed] = score;
+      localStorage.setItem(DAILY_BEST_KEY, JSON.stringify(scores));
+    }
+  } catch {}
+}
 
 function loadProgress() {
   try {
@@ -35,6 +60,8 @@ export default function App() {
   const [levelIdx, setLevelIdx] = useState(0);
   const [progress, setProgress] = useState(loadProgress);
   const [playToken, setPlayToken] = useState(0); // bumps to remount Gameplay on retry
+  const [activeLevel, setActiveLevel] = useState(null); // for endless/daily transient levels
+  const endlessUnlocked = (progress.unlocked || 1) >= 6 || (progress.stars || {})[5] > 0;
 
   // Global UI click sound for any .bubble-btn or .shop-card.
   // Fires after React's onClick (native bubble), so the action runs first.
@@ -51,11 +78,31 @@ export default function App() {
 
   const startLevel = useCallback((i) => {
     setLevelIdx(i);
+    setActiveLevel(null);
+    setPlayToken(t => t + 1);
+    setScreen('play');
+  }, []);
+
+  const startEndless = useCallback(() => {
+    setActiveLevel(makeEndlessLevel());
+    setPlayToken(t => t + 1);
+    setScreen('play');
+  }, []);
+
+  const startDaily = useCallback(() => {
+    setActiveLevel(makeDailyLevel());
     setPlayToken(t => t + 1);
     setScreen('play');
   }, []);
 
   const handleWin = useCallback((s) => {
+    if (activeLevel) {
+      // Endless or daily — there is no "win"; this only fires if endless somehow exhausts
+      // (it shouldn't because waves are infinite). Treat as defeat with score.
+      setStats({ ...s, score: s.score, mode: activeLevel.endless ? 'endless' : 'daily' });
+      setScreen('defeat');
+      return;
+    }
     const lvl = LEVELS[levelIdx];
     const stars = computeStars(s.hp, lvl.startHp);
     setProgress(prev => {
@@ -69,15 +116,35 @@ export default function App() {
     });
     setStats({ ...s, stars });
     setScreen('victory');
-  }, [levelIdx]);
+  }, [levelIdx, activeLevel]);
 
   const handleLose = useCallback((s) => {
-    setStats(s);
+    if (activeLevel && activeLevel.endless) {
+      const best = loadEndlessBest();
+      const beat = s.score > best;
+      if (beat) saveEndlessBest(s.score);
+      setStats({ ...s, mode: 'endless', best: Math.max(best, s.score), beat });
+    } else if (activeLevel && activeLevel.daily) {
+      saveDailyScore(activeLevel.seed, s.score);
+      setStats({ ...s, mode: 'daily', seed: activeLevel.seed });
+    } else {
+      setStats(s);
+    }
     setScreen('defeat');
-  }, []);
+  }, [activeLevel]);
 
   if (screen === 'menu') {
-    return <MainMenu onStart={() => setScreen('levels')} onBestiary={() => setScreen('bestiary')} />;
+    return <MainMenu
+      onStart={() => setScreen('levels')}
+      onBestiary={() => setScreen('bestiary')}
+      onAchievements={() => setScreen('achievements')}
+      onEndless={startEndless}
+      onDaily={startDaily}
+      endlessUnlocked={endlessUnlocked}
+    />;
+  }
+  if (screen === 'achievements') {
+    return <Achievements achState={loadAchievementState()} onBack={() => setScreen('menu')} />;
   }
   if (screen === 'levels') {
     return <LevelSelect progress={progress} onPick={startLevel} onBack={() => setScreen('menu')} />;
@@ -85,11 +152,11 @@ export default function App() {
   if (screen === 'play') {
     return (
       <Gameplay
-        key={`${levelIdx}-${playToken}`}
-        level={LEVELS[levelIdx]}
+        key={`${activeLevel ? activeLevel.id : levelIdx}-${playToken}`}
+        level={activeLevel || LEVELS[levelIdx]}
         onWin={handleWin}
         onLose={handleLose}
-        onMenu={() => setScreen('levels')}
+        onMenu={() => setScreen(activeLevel ? 'menu' : 'levels')}
       />
     );
   }
@@ -106,11 +173,16 @@ export default function App() {
     );
   }
   if (screen === 'defeat') {
+    const isMode = stats && (stats.mode === 'endless' || stats.mode === 'daily');
     return (
       <Defeat
         stats={stats}
-        onRetry={() => startLevel(levelIdx)}
-        onMenu={() => setScreen('levels')}
+        onRetry={() => {
+          if (stats?.mode === 'endless') startEndless();
+          else if (stats?.mode === 'daily') startDaily();
+          else startLevel(levelIdx);
+        }}
+        onMenu={() => setScreen(isMode ? 'menu' : 'levels')}
       />
     );
   }

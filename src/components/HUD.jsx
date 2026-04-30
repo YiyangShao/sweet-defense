@@ -21,13 +21,23 @@ export default function HUD({ world, totalWaves, onPause, onSpeed, onMenu, muted
       <div className="cute-card font-display" style={{ padding: '10px 22px', display: 'flex', alignItems: 'center', gap: 14, borderRadius: 999, pointerEvents: 'auto' }}>
         <span style={{ fontSize: 14, color: 'var(--ink-soft)' }}>第</span>
         <span style={{ fontSize: 24, color: 'var(--berry)' }}>{wave}</span>
-        <span style={{ fontSize: 14, color: 'var(--ink-soft)' }}>/ {totalWaves} 波</span>
+        <span style={{ fontSize: 14, color: 'var(--ink-soft)' }}>{world.level.endless ? '波 · ∞' : `/ ${totalWaves} 波`}</span>
         <div style={{ width: 1, height: 20, background: 'var(--cream-3)' }} />
         <span style={{ fontSize: 16 }}>⏱ {time}</span>
-        {preparing && wave <= totalWaves && (
+        {preparing && (
           <Fragment>
             <div style={{ width: 1, height: 20, background: 'var(--cream-3)' }} />
             <span style={{ fontSize: 14, color: 'var(--pink-deep)' }}>⏳ {prepLeft.toFixed(1)}s</span>
+          </Fragment>
+        )}
+        {(world.level.endless || world.level.daily) && (
+          <Fragment>
+            <div style={{ width: 1, height: 20, background: 'var(--cream-3)' }} />
+            <span style={{ fontSize: 14, color: 'var(--ink-soft)' }}>分</span>
+            <span style={{ fontSize: 22, color: 'var(--pink-deep)' }}>{world.score}</span>
+            {world.combo >= 2 && (
+              <span style={{ fontSize: 16, color: '#E8CE6E', fontWeight: 800 }}>×{world.combo}</span>
+            )}
           </Fragment>
         )}
       </div>

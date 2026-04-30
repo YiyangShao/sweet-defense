@@ -1,7 +1,7 @@
 import { Cupcake, Macaron, Donut, IceCream } from '../art/desserts.jsx';
 import { Mouse, Rabbit, Fox } from '../art/animals.jsx';
 
-export default function MainMenu({ onStart, onBestiary }) {
+export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAchievements, endlessUnlocked }) {
   return (
     <div className="sprinkle-bg full" style={{ position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '8%', left: '8%' }} className="floaty"><Cupcake size={110} /></div>
@@ -24,11 +24,30 @@ export default function MainMenu({ onStart, onBestiary }) {
           <button className="bubble-btn primary" style={{ fontSize: 24, padding: '20px 70px', minWidth: 260 }} onClick={onStart}>
             🎮 开始游戏
           </button>
-          <button className="bubble-btn" style={{ fontSize: 16, padding: '12px 28px' }} onClick={onBestiary}>
-            📖 动物图鉴
-          </button>
-          <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 6, maxWidth: 400, lineHeight: 1.6 }}>
-            点击底部商店选塔 → 点击草地放置 → 右键/Esc 取消 → 点击已放置的塔可升级或出售
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              className="bubble-btn mint"
+              style={{ fontSize: 15, padding: '12px 22px', opacity: endlessUnlocked ? 1 : 0.55 }}
+              disabled={!endlessUnlocked}
+              title={endlessUnlocked ? '挑战无尽模式' : '通关 L6 后解锁'}
+              onClick={endlessUnlocked ? onEndless : undefined}
+            >
+              ♾ 无尽模式{!endlessUnlocked && ' 🔒'}
+            </button>
+            <button className="bubble-btn" style={{ fontSize: 15, padding: '12px 22px' }} onClick={onDaily}>
+              📆 每日挑战
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="bubble-btn" style={{ fontSize: 14, padding: '10px 18px' }} onClick={onBestiary}>
+              📖 动物图鉴
+            </button>
+            <button className="bubble-btn" style={{ fontSize: 14, padding: '10px 18px' }} onClick={onAchievements}>
+              ✦ 成就
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 6, maxWidth: 420, lineHeight: 1.6 }}>
+            底部商店选塔 → 点击草地放置 → 右键/Esc 取消 → 点击敌人/石头集火 → 点击塔可升级
           </div>
         </div>
       </div>

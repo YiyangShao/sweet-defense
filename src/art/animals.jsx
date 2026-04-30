@@ -154,6 +154,96 @@ export const Fox = memo(({ size = 64 }) => (
   </svg>
 ));
 
+// === New enemies (Phase C) ===
+
+// Healer — small white bear with halo + heart on chest
+export const Healer = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="88" rx="22" ry="4" fill="rgba(90,62,54,0.2)" />
+    {/* Body */}
+    <ellipse cx="50" cy="64" rx="22" ry="20" fill="#FFE5EC" />
+    {/* Head */}
+    <circle cx="50" cy="40" r="20" fill="#FFEFF3" />
+    {/* Round ears */}
+    <circle cx="32" cy="22" r="8" fill="#FFE5EC" />
+    <circle cx="68" cy="22" r="8" fill="#FFE5EC" />
+    <circle cx="32" cy="22" r="4" fill="#F58CA6" />
+    <circle cx="68" cy="22" r="4" fill="#F58CA6" />
+    {/* Eyes */}
+    <circle cx="42" cy="42" r="2.5" fill="#3A2A26" />
+    <circle cx="58" cy="42" r="2.5" fill="#3A2A26" />
+    <circle cx="42.5" cy="41" r="0.8" fill="white" />
+    <circle cx="58.5" cy="41" r="0.8" fill="white" />
+    {/* Cheeks */}
+    <circle cx="36" cy="48" r="3" fill="#F58CA6" opacity="0.7" />
+    <circle cx="64" cy="48" r="3" fill="#F58CA6" opacity="0.7" />
+    {/* Smile */}
+    <path d="M 46 50 Q 50 53 54 50" stroke="#5A3E36" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    {/* Heart on chest */}
+    <path d="M 50 76 C 44 70 38 66 42 62 A 4 4 0 0 1 50 64 A 4 4 0 0 1 58 62 C 62 66 56 70 50 76 Z" fill="#F58CA6" />
+    {/* Halo */}
+    <ellipse cx="50" cy="10" rx="14" ry="4" fill="none" stroke="#F8E060" strokeWidth="2.5" />
+  </svg>
+));
+
+// Shielded — sugar tortoise with thick mint shell
+export const Shielded = memo(({ size = 64 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="86" rx="32" ry="5" fill="rgba(90,62,54,0.22)" />
+    {/* Shell */}
+    <path d="M 18 56 Q 18 32 50 28 Q 82 32 82 56 Q 82 76 50 80 Q 18 76 18 56 Z" fill="#A8D9C0" />
+    <path d="M 20 54 Q 20 32 50 30 Q 80 32 80 54 Q 80 72 50 76 Q 20 72 20 54 Z" fill="#C4E4D4" />
+    {/* Shell hex pattern */}
+    <circle cx="40" cy="46" r="5" fill="#7BB89A" opacity="0.5" />
+    <circle cx="60" cy="46" r="5" fill="#7BB89A" opacity="0.5" />
+    <circle cx="50" cy="58" r="6" fill="#7BB89A" opacity="0.5" />
+    <circle cx="36" cy="64" r="4" fill="#7BB89A" opacity="0.5" />
+    <circle cx="64" cy="64" r="4" fill="#7BB89A" opacity="0.5" />
+    {/* Sugar dome highlight */}
+    <ellipse cx="46" cy="38" rx="14" ry="6" fill="white" opacity="0.55" />
+    {/* Head poking out */}
+    <ellipse cx="22" cy="60" rx="11" ry="9" fill="#E8C9A8" />
+    <ellipse cx="22" cy="58" rx="11" ry="9" fill="#F5DEB3" />
+    <circle cx="14" cy="58" r="2" fill="#3A2A26" />
+    <circle cx="14.5" cy="57" r="0.6" fill="white" />
+    <circle cx="18" cy="64" r="2" fill="#FFB5C5" opacity="0.6" />
+    {/* Legs */}
+    <ellipse cx="30" cy="80" rx="6" ry="3" fill="#E8C9A8" />
+    <ellipse cx="70" cy="80" rx="6" ry="3" fill="#E8C9A8" />
+    {/* Tail */}
+    <path d="M 80 64 L 88 62 L 84 70 Z" fill="#E8C9A8" />
+  </svg>
+));
+
+// Splitter — bouncy gummy ball that splits on death.
+// `tint` lets us reuse the same SVG for the smaller "mini" variant in green.
+export const Splitter = memo(({ size = 64, tint = 'pink' }) => {
+  const palette = tint === 'mint'
+    ? { body: '#A8D9C0', highlight: '#C4E4D4', cheek: '#7BB89A' }
+    : { body: '#FFB5C5', highlight: '#FFD9E0', cheek: '#F58CA6' };
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size}>
+      <ellipse cx="50" cy="88" rx="22" ry="4" fill="rgba(90,62,54,0.2)" />
+      <circle cx="50" cy="58" r="28" fill={palette.body} />
+      <circle cx="50" cy="56" r="28" fill={palette.highlight} />
+      {/* Big highlight */}
+      <ellipse cx="40" cy="44" rx="12" ry="6" fill="white" opacity="0.6" />
+      {/* Face */}
+      <circle cx="42" cy="56" r="2.5" fill="#3A2A26" />
+      <circle cx="58" cy="56" r="2.5" fill="#3A2A26" />
+      <circle cx="42.5" cy="55" r="0.8" fill="white" />
+      <circle cx="58.5" cy="55" r="0.8" fill="white" />
+      <circle cx="36" cy="62" r="3" fill={palette.cheek} opacity="0.5" />
+      <circle cx="64" cy="62" r="3" fill={palette.cheek} opacity="0.5" />
+      <path d="M 42 66 Q 50 72 58 66" stroke="#5A3E36" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+      {/* Sparkles around */}
+      <text x="22" y="40" fontSize="10" fill="#F8E060">✦</text>
+      <text x="74" y="48" fontSize="10" fill="#F8E060">✦</text>
+      <text x="76" y="78" fontSize="9" fill="#F8E060">✦</text>
+    </svg>
+  );
+});
+
 export const Bear = memo(({ size = 64 }) => (
   <svg viewBox="0 0 100 100" width={size} height={size}>
     <ellipse cx="50" cy="92" rx="32" ry="5" fill="rgba(90,62,54,0.22)"/>

@@ -37,8 +37,15 @@ export function initWorld(level) {
     sugarEarned: 0,
     elapsed: 0,
     finished: null,
+    // Endless / daily run metadata
+    score: 0,
+    combo: 0,
+    bestCombo: 0,
+    lastKillAt: -10,
   };
 }
+
+export const COMBO_TIMEOUT = 4.0;
 
 export function placeWall(w, def, gx, gy) {
   const dist = w.path.distAtCell(gx, gy);
@@ -52,20 +59,52 @@ export function placeWall(w, def, gx, gy) {
   };
 }
 
-export function towerStats(tw) {
+const NEIGHBOR_OFFSETS = [
+  [-1, -1], [0, -1], [1, -1],
+  [-1,  0],          [1,  0],
+  [-1,  1], [0,  1], [1,  1],
+];
+
+// Compute additive synergy buffs from 8-neighbor towers + walls (walls don't
+// contribute synergy in Phase B but the lookup is shared).
+export function neighborBuffs(tw, w) {
+  let dmgMul = 0, rangeMul = 0, cdMul = 0, splashMul = 0;
+  let count = 0;
+  if (w && w.towers) {
+    for (const [dx, dy] of NEIGHBOR_OFFSETS) {
+      const nb = w.towers.find(t => t.id !== tw.id && t.gx === tw.gx + dx && t.gy === tw.gy + dy);
+      if (!nb) continue;
+      const ndef = TOWER_DEFS[nb.type];
+      const s = ndef && ndef.synergy;
+      if (!s) continue;
+      dmgMul += s.dmgMul || 0;
+      rangeMul += s.rangeMul || 0;
+      cdMul += s.cdMul || 0;
+      splashMul += s.splashMul || 0;
+      count += 1;
+    }
+  }
+  return { dmgMul, rangeMul, cdMul, splashMul, count };
+}
+
+export function towerStats(tw, w) {
   const def = TOWER_DEFS[tw.type];
   const lvl = tw.level;
-  const dmgMul = lvl === 1 ? 1 : lvl === 2 ? 1.5 : 2.25;
-  const rangeMul = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
-  const cdMul = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
+  const lvlDmg = lvl === 1 ? 1 : lvl === 2 ? 1.5 : 2.25;
+  const lvlRange = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
+  const lvlCd = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
+  const buff = neighborBuffs(tw, w);
   return {
-    dmg: def.dmg * dmgMul,
-    range: def.range * rangeMul,
-    cd: def.cd * cdMul,
-    splash: def.splash,
+    dmg: def.dmg * lvlDmg * (1 + buff.dmgMul),
+    range: def.range * lvlRange * (1 + buff.rangeMul),
+    cd: def.cd * lvlCd * (1 + buff.cdMul),
+    splash: def.splash != null ? def.splash * (1 + buff.splashMul) : undefined,
     slow: def.slow,
     stun: def.stun,
+    chainBounce: def.chainBounce,
+    knockback: def.knockback,
     proj: def.proj,
+    buff,
   };
 }
 

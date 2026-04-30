@@ -1,9 +1,31 @@
 import { T, ENEMY_DEFS, PREP_DURATION, ENGAGE_DIST } from './constants.js';
-import { towerStats } from './world.js';
+import { towerStats, COMBO_TIMEOUT } from './world.js';
 import { play, shootSoundFor } from './sfx.js';
+import { appendEndlessWave } from './modes.js';
 
 function emit(w, type, payload = {}) {
   w.events.push({ type, ...payload });
+}
+
+function spawnEnemy(w, type, dist) {
+  const def = ENEMY_DEFS[type];
+  if (!def) return;
+  w.enemies.push({
+    id: w.nextId++,
+    type,
+    dist,
+    hp: def.hp,
+    maxHp: def.hp,
+    baseSpeed: def.speed,
+    slowUntil: 0, slowFactor: 1,
+    stunUntil: 0,
+    flash: 0,
+    dead: false,
+    shield: def.shield || 0,
+    maxShield: def.shield || 0,
+    shieldBroken: false,
+    lastHealAt: 0,
+  });
 }
 
 function startWave(w, idx) {
@@ -45,6 +67,20 @@ function applyDamage(w, enemy, dmg, opts) {
     emit(w, 'enemy_dodged', { enemy_type: enemy.type });
     return false;
   }
+  // Shield absorbs damage first.
+  if (enemy.shield > 0) {
+    const absorbed = Math.min(enemy.shield, dmg);
+    enemy.shield -= absorbed;
+    dmg -= absorbed;
+    enemy.flash = 0.13;
+    w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: `盾-${Math.round(absorbed)}`, color: '#7BB6E0', t: 0 });
+    if (enemy.shield <= 0 && enemy.maxShield > 0 && !enemy.shieldBroken) {
+      enemy.shieldBroken = true;
+      spawnBurst(w, ep.x, ep.y, '#A8D9C0', 9, false);
+      emit(w, 'shield_broken', { enemy_type: enemy.type });
+    }
+    if (dmg <= 0) return true;
+  }
   enemy.hp -= dmg;
   enemy.flash = 0.13;
   w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: `-${Math.round(dmg)}`, color: '#E85A7A', t: 0 });
@@ -54,6 +90,10 @@ function applyDamage(w, enemy, dmg, opts) {
   }
   if (opts && opts.stun && !def.boss) {
     enemy.stunUntil = w.elapsed + opts.stun;
+  }
+  // Knockback (banana). Boss-immune.
+  if (opts && opts.knockback && !def.boss) {
+    enemy.dist = Math.max(0, enemy.dist - opts.knockback);
   }
   return true;
 }
@@ -76,19 +116,7 @@ export function update(w, rawDt) {
   if (w.waveState === 'spawning') {
     while (w.spawnQueue.length && w.spawnQueue[0].t <= w.waveTimer) {
       const spawn = w.spawnQueue.shift();
-      const def = ENEMY_DEFS[spawn.type];
-      w.enemies.push({
-        id: w.nextId++,
-        type: spawn.type,
-        dist: 0,
-        hp: def.hp,
-        maxHp: def.hp,
-        baseSpeed: def.speed,
-        slowUntil: 0, slowFactor: 1,
-        stunUntil: 0,
-        flash: 0,
-        dead: false,
-      });
+      spawnEnemy(w, spawn.type, 0);
     }
     if (!w.spawnQueue.length) w.waveState = 'active';
   }
@@ -101,10 +129,31 @@ export function update(w, rawDt) {
   for (const e of w.enemies) {
     if (e.dead || e.hp <= 0) continue;
     if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
+    const def = ENEMY_DEFS[e.type];
+
+    // Healer: periodic AOE heal of nearby allies (still ticks while stunned)
+    if (def.heal && (e.lastHealAt || 0) + def.heal.rate <= w.elapsed) {
+      const ep0 = w.path.posAt(e.dist);
+      const radPx = def.heal.radius * T;
+      let healed = false;
+      for (const other of w.enemies) {
+        if (other.dead || other === e) continue;
+        if (other.hp >= other.maxHp) continue;
+        const op = w.path.posAt(other.dist);
+        const d = Math.hypot(ep0.x - op.x, ep0.y - op.y);
+        if (d <= radPx) {
+          other.hp = Math.min(other.maxHp, other.hp + def.heal.amount);
+          w.floats.push({ id: w.nextId++, x: op.x, y: op.y - 28, text: `+${def.heal.amount}`, color: '#7BC4A0', t: 0 });
+          healed = true;
+        }
+      }
+      if (healed) spawnBurst(w, ep0.x, ep0.y, '#7BC4A0', 5, false);
+      e.lastHealAt = w.elapsed;
+    }
+
     const stunned = w.elapsed < e.stunUntil;
     if (stunned) continue;
 
-    const def = ENEMY_DEFS[e.type];
     const slow = w.elapsed < e.slowUntil ? e.slowFactor : 1;
     let newDist = e.dist + def.speed * T * slow * dt;
 
@@ -134,6 +183,8 @@ export function update(w, rawDt) {
       if (def.steal) w.sugar = Math.max(0, w.sugar - def.steal);
       e.dead = true;
       e.reachedCastle = true;
+      // Castle leak resets combo (penalty for letting enemies through).
+      w.combo = 0;
       emit(w, 'enemy_reached_castle', { enemy_type: e.type });
       if (w.hp <= 0) {
         w.hp = 0;
@@ -165,7 +216,7 @@ export function update(w, rawDt) {
   }
 
   for (const tw of w.towers) {
-    const stats = towerStats(tw);
+    const stats = towerStats(tw, w);
     tw.cooldown = Math.max(0, (tw.cooldown || 0) - dt);
     if (tw.shootPulse > 0) tw.shootPulse = Math.max(0, tw.shootPulse - dt);
     if (tw.cooldown > 0) continue;
@@ -211,6 +262,8 @@ export function update(w, rawDt) {
         splash: stats.splash,
         slow: stats.slow,
         stun: stats.stun,
+        chainBounce: stats.chainBounce,
+        knockback: stats.knockback,
         towerType: tw.type,
       });
       tw.cooldown = stats.cd;
@@ -277,6 +330,37 @@ export function update(w, rawDt) {
       spawnBurst(w, hitX, hitY, p.color, 5, false);
       if (landed) play('hit');
     }
+
+    // Strawberry chain bounce — damage 2 nearest unhit enemies in range
+    if (p.chainBounce && primaryEnemyId != null) {
+      const chainRangePx = 2.5 * T;
+      const candidates = [];
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0 || e.id === primaryEnemyId) continue;
+        const ep = w.path.posAt(e.dist);
+        const d = Math.hypot(ep.x - hitX, ep.y - hitY);
+        if (d <= chainRangePx) candidates.push({ e, d });
+      }
+      candidates.sort((a, b) => a.d - b.d);
+      let chainDmg = p.dmg * 0.65;
+      let prevX = hitX, prevY = hitY;
+      for (let i = 0; i < Math.min(p.chainBounce, candidates.length); i++) {
+        const { e } = candidates[i];
+        const tp = w.path.posAt(e.dist);
+        // Visual-only chain trail (no targetKind so hit logic ignores it)
+        w.projectiles.push({
+          id: w.nextId++,
+          fromX: prevX, fromY: prevY,
+          toX: tp.x, toY: tp.y,
+          targetId: -1, targetKind: 'visual',
+          t: 0, duration: 0.10,
+          color: p.color, size: 5, dmg: 0,
+        });
+        applyDamage(w, e, chainDmg, p);
+        chainDmg *= 0.7;
+        prevX = tp.x; prevY = tp.y;
+      }
+    }
     p.dead = true;
   }
   w.projectiles = w.projectiles.filter(p => !p.dead);
@@ -289,10 +373,27 @@ export function update(w, rawDt) {
         w.sugar += def.reward;
         w.sugarEarned += def.reward;
         w.enemiesKilled += 1;
+        // Combo: chained kills inside COMBO_TIMEOUT bump multiplier; score uses it.
+        if (w.elapsed - w.lastKillAt <= COMBO_TIMEOUT) w.combo += 1;
+        else w.combo = 1;
+        w.lastKillAt = w.elapsed;
+        if (w.combo > w.bestCombo) w.bestCombo = w.combo;
+        const scoreGain = Math.round(def.reward * w.combo * (def.boss ? 5 : 1));
+        w.score += scoreGain;
         const ep = w.path.posAt(e.dist);
         spawnBurst(w, ep.x, ep.y, '#F8E060', def.boss ? 16 : 7, def.boss);
-        emit(w, 'enemy_killed', { enemy_type: e.type, boss: !!def.boss, reward: def.reward });
+        if (w.combo >= 3) {
+          w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 56, text: `×${w.combo}`, color: '#F8E060', t: 0 });
+        }
+        emit(w, 'enemy_killed', { enemy_type: e.type, boss: !!def.boss, reward: def.reward, combo: w.combo });
         play(def.boss ? 'killBoss' : 'kill');
+        // Splitter: spawn children at the same path position
+        if (def.splitter) {
+          for (let i = 0; i < def.splitter.count; i++) {
+            const offset = (i - (def.splitter.count - 1) / 2) * 12;
+            spawnEnemy(w, def.splitter.childType, Math.max(0, e.dist + offset));
+          }
+        }
       }
     }
   }
@@ -310,6 +411,10 @@ export function update(w, rawDt) {
 
   if (w.waveState === 'active' && w.spawnQueue.length === 0 && w.enemies.length === 0) {
     emit(w, 'wave_cleared', { wave: w.waveIdx + 1 });
+    // Endless: lazily generate the next wave so .waves never runs out.
+    if (w.level.endless && w.waveIdx + 1 >= w.level.waves.length) {
+      appendEndlessWave(w.level);
+    }
     if (w.waveIdx + 1 >= w.level.waves.length) {
       w.finished = 'win';
       emit(w, 'level_won');
@@ -318,9 +423,15 @@ export function update(w, rawDt) {
       w.waveIdx += 1;
       w.waveState = 'preparing';
       w.waveTimer = -PREP_DURATION;
-      w.sugar += 25;
-      w.sugarEarned += 25;
+      const bonus = 25 + (w.level.endless ? Math.floor(w.waveIdx * 4) : 0);
+      w.sugar += bonus;
+      w.sugarEarned += bonus;
       play('coin');
     }
+  }
+
+  // Combo decays naturally when no kills for COMBO_TIMEOUT.
+  if (w.combo > 0 && w.elapsed - w.lastKillAt > COMBO_TIMEOUT) {
+    w.combo = 0;
   }
 }

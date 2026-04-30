@@ -1,6 +1,22 @@
 import { TOWER_DEFS, ENEMY_DEFS, WALL_DEFS, T, COLS, ROWS, W, H } from '../game/constants.js';
 import { Boulder, NougatWall } from '../art/structures.jsx';
-import { towerStats } from '../game/world.js';
+import {
+  MacaronTree, LollipopFlower, CookieBush, JellyCube, MarshmallowCloud,
+  GearCookie, IcePine, StarTwinkle, ChocoPot,
+} from '../art/decorations.jsx';
+import { towerStats, neighborBuffs } from '../game/world.js';
+
+const DECOR_COMPONENTS = {
+  macaronTree: MacaronTree,
+  lollipopFlower: LollipopFlower,
+  cookieBush: CookieBush,
+  jellyCube: JellyCube,
+  marshmallowCloud: MarshmallowCloud,
+  gearCookie: GearCookie,
+  icePine: IcePine,
+  starTwinkle: StarTwinkle,
+  chocoPot: ChocoPot,
+};
 
 export default function GameBoard({
   world, ghost, theme,
@@ -12,9 +28,10 @@ export default function GameBoard({
     const ep = world.path.posAt(e.dist);
     const def = ENEMY_DEFS[e.type];
     const Comp = def.Comp;
-    const size = def.boss ? T * 1.2 : T * 0.78;
+    const baseSize = def.boss ? T * 1.2 : T * 0.78;
+    const size = baseSize * (def.sizeMul || 1);
     const hpPct = e.hp / e.maxHp;
-    const hpW = def.boss ? 70 : 44;
+    const hpW = def.boss ? 70 : Math.round(44 * (def.sizeMul || 1));
     return (
       <g
         key={e.id}
@@ -26,8 +43,15 @@ export default function GameBoard({
         onClick={(ev) => { ev.stopPropagation(); onEnemyClick && onEnemyClick(e.id); }}
       >
         <g transform={`translate(${-size / 2} ${-size / 2})`}>
-          <Comp size={size} />
+          <Comp size={size} tint={def.tint} />
         </g>
+        {/* Shield bubble */}
+        {e.shield > 0 && (
+          <g style={{ pointerEvents: 'none' }}>
+            <circle r={size / 2 + 8} fill="rgba(168,217,232,0.18)" stroke="#7BB6E0" strokeWidth="2" strokeDasharray="4 3" />
+            <text x="0" y={-size / 2 - 4} textAnchor="middle" fontSize="10" fontWeight="800" fill="#5A8FB8">{Math.round(e.shield)}</text>
+          </g>
+        )}
         <g transform={`translate(${-hpW / 2} ${-size / 2 - 12})`}>
           <rect x="0" y="0" width={hpW} height="7" rx="3.5" fill="white" stroke="#E5DCC5" strokeWidth="1" />
           <rect x="2" y="2" width={(hpW - 4) * hpPct} height="3" rx="1.5"
@@ -48,16 +72,25 @@ export default function GameBoard({
     const Comp = def.Comp;
     const cx = tw.gx * T + T / 2, cy = tw.gy * T + T / 2;
     const lvl = tw.level;
-    // Size scales subtly by level; shoot-pulse is more punchy now
     const lvlScale = 1 + (lvl - 1) * 0.06;
     const sz = T * (tw.shootPulse > 0 ? lvlScale * 1.10 : lvlScale * 1.0);
     const isSelected = world.selectedPlacedTower === tw.id;
+    const buff = neighborBuffs(tw, world);
+    const isBuffed = buff.count > 0;
 
     return (
       <g key={tw.id} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onTowerClick(tw.id); }}>
         {/* Soft ground contact shadow (extended for 3D depth) */}
         <ellipse cx={cx} cy={cy + 14} rx={T * 0.46} ry={T * 0.16} fill="rgba(60,40,32,0.30)" filter="url(#sd-blur)" />
         <ellipse cx={cx} cy={cy + 10} rx={T * 0.40} ry={T * 0.12} fill="rgba(60,40,32,0.18)" />
+
+        {/* Synergy halo for buffed towers */}
+        {isBuffed && (
+          <>
+            <circle cx={cx} cy={cy} r={T * 0.50} fill="none" stroke="#F8E060" strokeWidth="2.5" opacity="0.85" strokeDasharray="3 2" />
+            <circle cx={cx} cy={cy} r={T * 0.54} fill="none" stroke="#FFE066" strokeWidth="1.5" opacity="0.45" />
+          </>
+        )}
 
         {/* Base pad with radial gradient (dome look) */}
         <circle cx={cx} cy={cy} r={T * 0.42} fill="url(#sd-baseGrad)" />
@@ -101,6 +134,13 @@ export default function GameBoard({
           <g transform={`translate(${cx + T * 0.26} ${cy - T * 0.26})`}>
             <circle r="12" fill={lvl === 3 ? '#F8E060' : '#E8E0D0'} stroke="#F58CA6" strokeWidth="2" />
             <text x="0" y="4" textAnchor="middle" fontSize="12" fontWeight="800" fill={lvl === 3 ? '#8B5E3C' : '#5A3E36'} fontFamily="Fredoka, sans-serif">{lvl}</text>
+          </g>
+        )}
+        {/* Synergy buff badge */}
+        {isBuffed && (
+          <g transform={`translate(${cx - T * 0.30} ${cy - T * 0.30})`}>
+            <circle r="10" fill="#F8E060" stroke="white" strokeWidth="2" />
+            <text x="0" y="3" textAnchor="middle" fontSize="11" fontWeight="800" fill="#8B5E3C" fontFamily="Fredoka, sans-serif">✦</text>
           </g>
         )}
       </g>
@@ -194,7 +234,7 @@ export default function GameBoard({
 
   const selectedTw = world.selectedPlacedTower != null ? world.towers.find(t => t.id === world.selectedPlacedTower) : null;
   const selectedRange = selectedTw && (() => {
-    const stats = towerStats(selectedTw);
+    const stats = towerStats(selectedTw, world);
     const cx = selectedTw.gx * T + T / 2, cy = selectedTw.gy * T + T / 2;
     return (
       <circle cx={cx} cy={cy} r={stats.range * T} fill="rgba(255,181,197,0.18)" stroke="#F58CA6" strokeWidth="3" strokeDasharray="8 6" />
@@ -274,6 +314,24 @@ export default function GameBoard({
 
   const bgPrimary = theme?.bgPrimary || '#C4E4D4';
   const bgSecondary = theme?.bgSecondary || '#D4ECDD';
+  const pathStyle = theme?.pathStyle;
+  const pathOuter = pathStyle?.outer || '#E0BC8C';
+  const pathInner = pathStyle?.inner || '#F5DEB3';
+  const pathInnerOpacity = pathStyle?.innerOpacity ?? 1;
+  const sprinkleColors = pathStyle?.sprinkles || ['#FFB5C5', '#7BC4A0', '#F8E060', '#B79CD1', '#F5B872'];
+
+  // Per-level grass decorations (rendered above tiles, below path).
+  const decorationEls = (theme?.decorations || []).map((d, i) => {
+    const Comp = DECOR_COMPONENTS[d.type];
+    if (!Comp) return null;
+    const cx = d.gx * T + T / 2, cy = d.gy * T + T / 2;
+    const sz = d.size || T * 0.85;
+    return (
+      <g key={`decor-${i}`} style={{ pointerEvents: 'none' }} transform={`translate(${cx - sz / 2} ${cy - sz / 2})`}>
+        <Comp size={sz} />
+      </g>
+    );
+  });
 
   return (
     <svg
@@ -338,16 +396,25 @@ export default function GameBoard({
         <line key={`h${i}`} x1="0" y1={i * T} x2={W} y2={i * T} stroke="#A8D9C0" strokeWidth="0.5" opacity="0.4" />
       ))}
 
-      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#E0BC8C" strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F5DEB3" strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" />
+      {decorationEls}
+
+      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathOuter} strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathInner} strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" opacity={pathInnerOpacity} />
+      {/* Optional conveyor stripes for L5 chocolate factory */}
+      {pathStyle && pathStyle.stripes && (
+        <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F8E060" strokeWidth={T * 0.05} strokeDasharray="14 14" strokeLinejoin="round" strokeLinecap="round" opacity="0.6" />
+      )}
+      {/* Optional ice cracks for L6 snow mountain */}
+      {pathStyle && pathStyle.cracks && (
+        <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#7BB6E0" strokeWidth="1.2" strokeDasharray="3 6" strokeLinejoin="round" strokeLinecap="round" opacity="0.5" />
+      )}
 
       {world.path.grid.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
         const cx = gx * T + T / 2, cy = gy * T + T / 2;
-        const colors = ['#FFB5C5', '#7BC4A0', '#F8E060', '#B79CD1', '#F5B872'];
         return (
           <g key={`sp${i}`}>
-            <rect x={cx - 18} y={cy - 12} width="6" height="2.5" rx="1.2" fill={colors[i % 5]} transform={`rotate(${(i * 37) % 180 - 90} ${cx - 15} ${cy - 11})`} />
-            <rect x={cx + 10} y={cy + 8} width="6" height="2.5" rx="1.2" fill={colors[(i + 2) % 5]} transform={`rotate(${(i * 53) % 180 - 90} ${cx + 13} ${cy + 9})`} />
+            <rect x={cx - 18} y={cy - 12} width="6" height="2.5" rx="1.2" fill={sprinkleColors[i % sprinkleColors.length]} transform={`rotate(${(i * 37) % 180 - 90} ${cx - 15} ${cy - 11})`} />
+            <rect x={cx + 10} y={cy + 8} width="6" height="2.5" rx="1.2" fill={sprinkleColors[(i + 2) % sprinkleColors.length]} transform={`rotate(${(i * 53) % 180 - 90} ${cx + 13} ${cy + 9})`} />
           </g>
         );
       })}

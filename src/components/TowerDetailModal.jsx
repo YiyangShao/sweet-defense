@@ -2,9 +2,9 @@ import { TOWER_DEFS } from '../game/constants.js';
 import { towerStats, upgradeCost, sellRefund } from '../game/world.js';
 import { Sugar } from '../art/icons.jsx';
 
-export default function TowerDetailModal({ tower, sugar, onUpgrade, onSell, onClose }) {
+export default function TowerDetailModal({ tower, world, sugar, onUpgrade, onSell, onClose }) {
   const def = TOWER_DEFS[tower.type];
-  const stats = towerStats(tower);
+  const stats = towerStats(tower, world);
   const Comp = def.Comp;
   const upCost = upgradeCost(tower);
   const refund = sellRefund(tower);
@@ -30,7 +30,7 @@ export default function TowerDetailModal({ tower, sugar, onUpgrade, onSell, onCl
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
           {[
             { k: '攻击力', v: stats.dmg.toFixed(0), pct: Math.min(1, stats.dmg / 60), c: 'var(--pink-deep)' },
             { k: '射速', v: (1 / stats.cd).toFixed(1) + '/s', pct: Math.min(1, (1 / stats.cd) / 5), c: 'var(--peach-deep)' },
@@ -48,6 +48,17 @@ export default function TowerDetailModal({ tower, sugar, onUpgrade, onSell, onCl
             </div>
           ))}
         </div>
+
+        {stats.buff && stats.buff.count > 0 && (
+          <div style={{ background: 'linear-gradient(180deg, #FFF1C4 0%, #F8E8B0 100%)', borderRadius: 12, padding: '8px 14px', marginBottom: 14, fontSize: 12, color: '#8B5E3C' }}>
+            <span style={{ fontWeight: 800, marginRight: 6 }}>✦ 协同加成</span>
+            来自 {stats.buff.count} 邻塔：
+            {stats.buff.dmgMul ? ` 攻+${(stats.buff.dmgMul * 100).toFixed(0)}%` : ''}
+            {stats.buff.rangeMul ? ` 射程+${(stats.buff.rangeMul * 100).toFixed(0)}%` : ''}
+            {stats.buff.cdMul ? ` 射速+${(-stats.buff.cdMul * 100).toFixed(0)}%` : ''}
+            {stats.buff.splashMul ? ` 范围+${(stats.buff.splashMul * 100).toFixed(0)}%` : ''}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 10 }}>
           {upCost !== null ? (

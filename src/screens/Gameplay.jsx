@@ -4,11 +4,13 @@ import { inBounds } from '../game/path.js';
 import { initWorld, upgradeCost, sellRefund, placeWall } from '../game/world.js';
 import { update } from '../game/update.js';
 import { play, isMuted, toggleMute } from '../game/sfx.js';
+import { processEvents, loadAchievementState, saveAchievementState } from '../game/achievements.js';
 import GameBoard from '../components/GameBoard.jsx';
 import HUD from '../components/HUD.jsx';
 import WavePreview from '../components/WavePreview.jsx';
 import TowerShop from '../components/TowerShop.jsx';
 import TowerDetailModal from '../components/TowerDetailModal.jsx';
+import AchievementToast from '../components/AchievementToast.jsx';
 
 export default function Gameplay({ level, onWin, onLose, onMenu }) {
   const worldRef = useRef(initWorld(level));
@@ -16,6 +18,9 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
   const [muted, setMuted] = useState(isMuted());
   const svgRef = useRef(null);
   const [hover, setHover] = useState(null);
+  const [toastUnlocks, setToastUnlocks] = useState([]);
+  const achStateRef = useRef(loadAchievementState());
+  const lastEventIdxRef = useRef(0);
   const onMute = () => setMuted(toggleMute());
 
   const w = worldRef.current;
@@ -30,16 +35,33 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       update(worldRef.current, dt);
-      forceTick(t => (t + 1) & 0xffff);
       const ww = worldRef.current;
+
+      // Drain new events for the achievement system.
+      const evs = ww.events;
+      if (evs.length > lastEventIdxRef.current) {
+        const delta = evs.slice(lastEventIdxRef.current);
+        lastEventIdxRef.current = evs.length;
+        const unlocks = processEvents(delta, achStateRef.current, {
+          fullHp: ww.finished === 'win' && ww.hp >= ww.level.startHp,
+          endlessWave: ww.level.endless ? ww.waveIdx + 1 : 0,
+          dailyDone: ww.level.daily && ww.finished ? true : false,
+        });
+        if (unlocks.length) {
+          saveAchievementState(achStateRef.current);
+          setToastUnlocks(prev => [...prev, ...unlocks].slice(-4));
+        }
+      }
+
+      forceTick(t => (t + 1) & 0xffff);
       if (ww.finished === 'win') {
         stopped = true;
-        onWin({ hp: ww.hp, killed: ww.enemiesKilled, earned: ww.sugarEarned });
+        onWin({ hp: ww.hp, killed: ww.enemiesKilled, earned: ww.sugarEarned, score: ww.score, bestCombo: ww.bestCombo });
         return;
       }
       if (ww.finished === 'lose') {
         stopped = true;
-        onLose({ hp: 0, killed: ww.enemiesKilled, wave: ww.waveIdx + 1 });
+        onLose({ hp: 0, killed: ww.enemiesKilled, wave: ww.waveIdx + 1, score: ww.score, bestCombo: ww.bestCombo });
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -282,6 +304,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       {selectedTw && (
         <TowerDetailModal
           tower={selectedTw}
+          world={w}
           sugar={w.sugar}
           onUpgrade={onUpgrade}
           onSell={onSell}
@@ -293,6 +316,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
           <div className="font-display" style={{ fontSize: 88, color: 'white', textShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>⏸ 暂停</div>
         </div>
       )}
+      <AchievementToast unlocks={toastUnlocks} onDismiss={() => setToastUnlocks([])} />
     </div>
   );
 }

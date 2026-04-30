@@ -130,6 +130,82 @@ export const Cake = memo(({ size = 80 }) => (
   </svg>
 ));
 
+// === Fruit towers (Phase C) ===
+
+export const Lemon = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="30" ry="5" fill="rgba(90,62,54,0.18)" />
+    {/* Frosted cup */}
+    <path d="M 28 58 L 26 88 Q 26 92 30 92 L 70 92 Q 74 92 74 88 L 72 58 Z" fill="#E0F0FF" opacity="0.7" />
+    <rect x="28" y="56" width="44" height="6" rx="3" fill="#C4DCEF" />
+    {/* Liquid */}
+    <rect x="30" y="62" width="40" height="26" rx="2" fill="#FFE066" opacity="0.7" />
+    {/* Lemon slice on top */}
+    <ellipse cx="50" cy="42" rx="24" ry="20" fill="#F8E060" />
+    <ellipse cx="50" cy="40" rx="24" ry="20" fill="#FFEC80" />
+    <ellipse cx="50" cy="40" rx="14" ry="12" fill="#FFF1A0" />
+    {/* Lemon segments */}
+    <path d="M 50 28 L 50 52 M 38 32 L 62 48 M 38 48 L 62 32" stroke="#E8CE6E" strokeWidth="1.2" fill="none" opacity="0.7" />
+    {/* Highlight */}
+    <ellipse cx="42" cy="32" rx="8" ry="4" fill="white" opacity="0.6" />
+    {/* Leaves */}
+    <path d="M 38 22 Q 32 16 44 18 Q 42 22 38 22 Z" fill="#7BC4A0" />
+    <path d="M 62 22 Q 68 16 56 18 Q 58 22 62 22 Z" fill="#7BC4A0" />
+    {/* Straw */}
+    <rect x="64" y="14" width="3" height="48" rx="1" fill="#F58CA6" transform="rotate(8 65 38)" />
+    {/* Bubbles */}
+    <circle cx="34" cy="74" r="2" fill="white" opacity="0.7" />
+    <circle cx="60" cy="80" r="1.5" fill="white" opacity="0.7" />
+    <circle cx="44" cy="84" r="1.5" fill="white" opacity="0.6" />
+  </svg>
+));
+
+export const Strawberry = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="26" ry="5" fill="rgba(90,62,54,0.18)" />
+    {/* Body */}
+    <path d="M 26 36 Q 50 28 74 36 Q 72 56 60 76 Q 50 92 40 76 Q 28 56 26 36 Z" fill="#F58CA6" />
+    <path d="M 28 38 Q 50 32 72 38 Q 70 54 60 72 Q 50 86 40 72 Q 30 54 28 38 Z" fill="#FFB5C5" />
+    {/* Highlight */}
+    <ellipse cx="40" cy="46" rx="10" ry="6" fill="white" opacity="0.45" />
+    {/* Seeds */}
+    {[
+      [38, 50], [50, 46], [62, 50], [44, 60], [56, 60], [50, 70],
+      [40, 72], [60, 72], [46, 80], [54, 80],
+    ].map(([x, y], i) => (
+      <ellipse key={i} cx={x} cy={y} rx="1.6" ry="2.2" fill="#F8E060" transform={`rotate(${(i * 31) % 60 - 30} ${x} ${y})`} />
+    ))}
+    {/* Leaves on top */}
+    <path d="M 28 30 L 36 18 L 42 28 L 50 16 L 58 28 L 64 18 L 72 30 Q 50 36 28 30 Z" fill="#7BC4A0" />
+    <path d="M 36 24 L 40 18 L 44 24 Z" fill="#A8D9C0" />
+    <path d="M 56 24 L 60 18 L 64 24 Z" fill="#A8D9C0" />
+    {/* Stem */}
+    <rect x="48" y="14" width="4" height="6" rx="1" fill="#7A4F3F" />
+  </svg>
+));
+
+export const Banana = memo(({ size = 80 }) => (
+  <svg viewBox="0 0 100 100" width={size} height={size}>
+    <ellipse cx="50" cy="92" rx="32" ry="5" fill="rgba(90,62,54,0.18)" />
+    {/* Banana curved body */}
+    <path d="M 16 56 Q 14 32 36 22 Q 56 16 78 32 Q 88 50 82 70 Q 76 86 56 88 Q 30 86 18 70 Q 14 64 16 56 Z" fill="#E8CE6E" />
+    <path d="M 18 56 Q 18 36 36 26 Q 56 22 76 36 Q 84 50 78 66 Q 74 80 56 82 Q 32 82 22 68 Q 18 62 18 56 Z" fill="#F8E060" />
+    {/* Peel inside curl highlight */}
+    <path d="M 22 56 Q 24 40 38 32" stroke="#FFEC80" strokeWidth="6" fill="none" strokeLinecap="round" opacity="0.8" />
+    {/* Brown tips */}
+    <ellipse cx="18" cy="58" rx="4" ry="5" fill="#A98467" />
+    <ellipse cx="82" cy="62" rx="4" ry="5" fill="#A98467" />
+    {/* Stem */}
+    <rect x="78" y="22" width="3" height="10" rx="1" fill="#7A4F3F" transform="rotate(20 80 26)" />
+    {/* Cute face */}
+    <ellipse cx="40" cy="54" rx="2" ry="2.5" fill="#3A2A26" />
+    <ellipse cx="58" cy="50" rx="2" ry="2.5" fill="#3A2A26" />
+    <path d="M 42 62 Q 50 66 56 60" stroke="#5A3E36" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+    <circle cx="34" cy="60" r="3" fill="#FFB5C5" opacity="0.6" />
+    <circle cx="64" cy="56" r="3" fill="#FFB5C5" opacity="0.6" />
+  </svg>
+));
+
 export const ChocoFountain = memo(({ size = 80 }) => (
   <svg viewBox="0 0 100 100" width={size} height={size}>
     <ellipse cx="50" cy="93" rx="32" ry="5" fill="rgba(90,62,54,0.18)"/>
