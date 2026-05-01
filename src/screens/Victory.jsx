@@ -35,6 +35,23 @@ export default function Victory({ stats, hasNext, onRetry, onNext, onMenu }) {
           <Stat label="击败敌人" val={stats.killed} icon="🐭" />
           <Stat label="获得糖果" val={`+${stats.earned}`} icon={<Sugar size={20} />} />
         </div>
+        {stats.masteryUnlocked && (
+          <div className="cute-card" style={{
+            padding: '14px 22px', marginBottom: 18, display: 'inline-block',
+            background: 'linear-gradient(135deg, #FFE5B4 0%, #F8E060 100%)',
+            border: '2px solid var(--peach-deep)',
+          }}>
+            <div className="font-display" style={{ fontSize: 12, color: 'var(--ink-soft)', letterSpacing: '0.18em' }}>
+              ✦ 主题精通解锁
+            </div>
+            <div className="font-display" style={{ fontSize: 18, color: 'var(--ink)', marginTop: 2 }}>
+              👑 {stats.themeName || '本主题'} · 金边皮肤
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+              再回这个主题任意一关，所有塔将披上金光
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <button className="bubble-btn" style={{ padding: '14px 24px', fontSize: 15 }} onClick={onMenu}>← 关卡</button>
           <button className="bubble-btn" style={{ padding: '14px 24px', fontSize: 15 }} onClick={onRetry}>🔁 重玩</button>

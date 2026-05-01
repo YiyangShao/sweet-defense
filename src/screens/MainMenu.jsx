@@ -1,7 +1,14 @@
 import { Cupcake, Macaron, Donut, IceCream } from '../art/desserts.jsx';
 import { Mouse, Rabbit, Fox } from '../art/animals.jsx';
 
-export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAchievements, endlessUnlocked }) {
+export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAchievements, dailyStreak }) {
+  const streakCount = dailyStreak?.count || 0;
+  // "Active" streak = last completion was today or yesterday (not stale from weeks ago).
+  const today = new Date();
+  const todayK = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+  const yK = (() => { const y = new Date(today.getTime() - 86400000); return `${y.getFullYear()}-${y.getMonth() + 1}-${y.getDate()}`; })();
+  const streakActive = dailyStreak?.lastDate === todayK || dailyStreak?.lastDate === yK;
+  const streakDoneToday = dailyStreak?.lastDate === todayK;
   return (
     <div className="sprinkle-bg full" style={{ position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '8%', left: '8%' }} className="floaty"><Cupcake size={110} /></div>
@@ -27,15 +34,31 @@ export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAc
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               className="bubble-btn mint"
-              style={{ fontSize: 15, padding: '12px 22px', opacity: endlessUnlocked ? 1 : 0.55 }}
-              disabled={!endlessUnlocked}
-              title={endlessUnlocked ? '挑战无尽模式' : '通关 L6 后解锁'}
-              onClick={endlessUnlocked ? onEndless : undefined}
+              style={{ fontSize: 15, padding: '12px 22px' }}
+              title="挑战无尽模式"
+              onClick={onEndless}
             >
-              ♾ 无尽模式{!endlessUnlocked && ' 🔒'}
+              ♾ 无尽模式
             </button>
-            <button className="bubble-btn" style={{ fontSize: 15, padding: '12px 22px' }} onClick={onDaily}>
+            <button
+              className="bubble-btn"
+              style={{ fontSize: 15, padding: '12px 22px', position: 'relative' }}
+              onClick={onDaily}
+              title={streakDoneToday ? '今日已挑战，可再战追分' : '完成每日挑战累计连续天数'}
+            >
               📆 每日挑战
+              {streakActive && streakCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -8, right: -10,
+                  background: streakDoneToday ? 'var(--peach-deep)' : 'var(--pink-deep)',
+                  color: 'white',
+                  fontSize: 11, fontWeight: 800,
+                  padding: '2px 8px', borderRadius: 999,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                }}>
+                  🔥 {streakCount}
+                </span>
+              )}
             </button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>

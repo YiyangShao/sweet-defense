@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { TOWER_DEFS, WALL_DEFS, T, COLS, ROWS } from '../game/constants.js';
 import { inBounds } from '../game/path.js';
-import { initWorld, upgradeCost, sellRefund, placeWall } from '../game/world.js';
+import { initWorld, upgradeCost, sellRefund, placeWall, isAnyPathCell } from '../game/world.js';
 import { update } from '../game/update.js';
 import { play, isMuted, toggleMute } from '../game/sfx.js';
 import { processEvents, loadAchievementState, saveAchievementState } from '../game/achievements.js';
@@ -11,8 +11,11 @@ import WavePreview from '../components/WavePreview.jsx';
 import TowerShop from '../components/TowerShop.jsx';
 import TowerDetailModal from '../components/TowerDetailModal.jsx';
 import AchievementToast from '../components/AchievementToast.jsx';
+import TutorialOverlay from '../components/TutorialOverlay.jsx';
 
-export default function Gameplay({ level, onWin, onLose, onMenu }) {
+const TUTORIAL_KEY = 'sd-tutorial-done-v1';
+
+export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }) {
   const worldRef = useRef(initWorld(level));
   const [, forceTick] = useState(0);
   const [muted, setMuted] = useState(isMuted());
@@ -21,6 +24,14 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
   const [toastUnlocks, setToastUnlocks] = useState([]);
   const achStateRef = useRef(loadAchievementState());
   const lastEventIdxRef = useRef(0);
+  const [showTutorial, setShowTutorial] = useState(() => {
+    if (level.id !== 1) return false;
+    try { return localStorage.getItem(TUTORIAL_KEY) !== '1'; } catch { return false; }
+  });
+  const dismissTutorial = () => {
+    try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch {}
+    setShowTutorial(false);
+  };
   const onMute = () => setMuted(toggleMute());
 
   const w = worldRef.current;
@@ -61,7 +72,14 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
       }
       if (ww.finished === 'lose') {
         stopped = true;
-        onLose({ hp: 0, killed: ww.enemiesKilled, wave: ww.waveIdx + 1, score: ww.score, bestCombo: ww.bestCombo });
+        onLose({
+          hp: 0,
+          killed: ww.enemiesKilled,
+          wave: ww.waveIdx + 1,
+          score: ww.score,
+          bestCombo: ww.bestCombo,
+          damageByType: ww.damageByType,
+        });
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -127,7 +145,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
     if (!c) return;
     if (w.selectedTowerType === 'wall') {
       const def = WALL_DEFS.wall;
-      if (!w.path.isPathCell(c.gx, c.gy) || wallAt(c.gx, c.gy)) {
+      if (!isAnyPathCell(w, c.gx, c.gy) || wallAt(c.gx, c.gy)) {
         play('deny');
         return;
       }
@@ -145,7 +163,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
     }
     if (w.selectedTowerType) {
       const def = TOWER_DEFS[w.selectedTowerType];
-      if (w.path.isPathCell(c.gx, c.gy) || towerAt(c.gx, c.gy) || obstacleAt(c.gx, c.gy)) {
+      if (isAnyPathCell(w, c.gx, c.gy) || towerAt(c.gx, c.gy) || obstacleAt(c.gx, c.gy)) {
         play('deny');
         return;
       }
@@ -262,12 +280,12 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
   const ghost = (() => {
     if (!w.selectedTowerType || !hover) return null;
     if (w.selectedTowerType === 'wall') {
-      const valid = w.path.isPathCell(hover.gx, hover.gy)
+      const valid = isAnyPathCell(w, hover.gx, hover.gy)
         && !wallAt(hover.gx, hover.gy)
         && w.sugar >= WALL_DEFS.wall.cost;
       return { kind: 'wall', type: 'wall', gx: hover.gx, gy: hover.gy, valid };
     }
-    const valid = !w.path.isPathCell(hover.gx, hover.gy)
+    const valid = !isAnyPathCell(w, hover.gx, hover.gy)
       && !towerAt(hover.gx, hover.gy)
       && !obstacleAt(hover.gx, hover.gy)
       && w.sugar >= TOWER_DEFS[w.selectedTowerType].cost;
@@ -283,6 +301,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
           world={w}
           ghost={ghost}
           theme={level}
+          themeMastered={themeMastered}
           svgRef={svgRef}
           onCellClick={onCellClick}
           onCellRightClick={onCellRightClick}
@@ -317,6 +336,7 @@ export default function Gameplay({ level, onWin, onLose, onMenu }) {
         </div>
       )}
       <AchievementToast unlocks={toastUnlocks} onDismiss={() => setToastUnlocks([])} />
+      {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
     </div>
   );
 }

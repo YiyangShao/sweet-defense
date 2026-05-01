@@ -1,4 +1,10 @@
-import { PATH_ENDLESS, PATH_L3, PATH_L4, PATH_L5, PATH_L6 } from './constants.js';
+import {
+  PATH_ENDLESS,
+  PATH_ZIGZAG,
+  PATH_MEANDER,
+  PATH_RIGHTANGLE,
+  PATH_DESCEND,
+} from './levels/paths.js';
 import { mulberry32, pickFrom, dailySeed } from './rng.js';
 
 // Procedural enemy mix per "tier" — index roughly = wave count.
@@ -96,12 +102,12 @@ export function appendEndlessWave(level) {
 
 // === Daily challenge ===
 //
-// Same path everyday (PATH_L3 zigzag), but obstacles + waves seeded by today's
-// date so every player faces the same "puzzle" each day.
+// Same path everyday (zigzag-style rotation), seeded by today's date so every
+// player faces the same "puzzle" each day.
 export function makeDailyLevel(d = new Date()) {
   const seed = dailySeed(d);
   const rng = mulberry32(seed);
-  const paths = [PATH_L3, PATH_L4, PATH_L5, PATH_L6];
+  const paths = [PATH_ZIGZAG, PATH_MEANDER, PATH_RIGHTANGLE, PATH_DESCEND];
   const path = paths[seed % paths.length];
 
   // Generate 3-5 obstacle positions on grass cells.

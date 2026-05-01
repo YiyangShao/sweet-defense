@@ -9,10 +9,13 @@ export function initWorld(level) {
     reward: OBSTACLE_REWARD,
     flash: 0,
   }));
-  const path = buildPath(level.pathGrid, T);
+  // Multi-path support: level.paths (array) takes precedence; fall back to single pathGrid.
+  const pathGrids = (level.paths && level.paths.length) ? level.paths : [level.pathGrid];
+  const paths = pathGrids.map(g => buildPath(g, T));
   return {
     level,
-    path,               // per-level path object owns posAt / isPathCell / etc.
+    paths,              // array of path objects (length 1 for normal levels)
+    path: paths[0],     // backward-compat alias for single-path consumers
     hp: level.startHp,
     sugar: level.startSugar,
     waveIdx: 0,
@@ -37,26 +40,43 @@ export function initWorld(level) {
     sugarEarned: 0,
     elapsed: 0,
     finished: null,
+    damageByType: {},   // enemy_type -> total castle damage dealt this run
+
     // Endless / daily run metadata
     score: 0,
     combo: 0,
     bestCombo: 0,
     lastKillAt: -10,
+    // T3 tidal cursor — null means "compute first trigger time on first tick"
+    tidalNextAt: null,
+    // T6 frozen cells (gx,gy) reduce tower fire rate when placed there.
+    frozenSet: level.frozenCells ? new Set(level.frozenCells.map(([x, y]) => `${x},${y}`)) : null,
   };
 }
 
 export const COMBO_TIMEOUT = 4.0;
 
+// A wall might cover one or both paths (in multipath levels). Store dist
+// per-path so each enemy on each path can find its own next wall.
 export function placeWall(w, def, gx, gy) {
-  const dist = w.path.distAtCell(gx, gy);
+  const pathDists = [];
+  for (let i = 0; i < w.paths.length; i++) {
+    const d = w.paths[i].distAtCell(gx, gy);
+    if (d >= 0) pathDists.push({ pathIdx: i, dist: d });
+  }
   return {
     id: w.nextId++,
     gx, gy,
-    dist,
+    pathDists,                                   // [{pathIdx, dist}, ...]
+    dist: pathDists[0] ? pathDists[0].dist : 0,  // legacy alias
     hp: def.hp,
     maxHp: def.hp,
     flash: 0,
   };
+}
+
+export function isAnyPathCell(w, gx, gy) {
+  return w.paths.some(p => p.isPathCell(gx, gy));
 }
 
 const NEIGHBOR_OFFSETS = [
@@ -87,6 +107,10 @@ export function neighborBuffs(tw, w) {
   return { dmgMul, rangeMul, cdMul, splashMul, count };
 }
 
+export function isFrozenCell(w, gx, gy) {
+  return w.frozenSet ? w.frozenSet.has(`${gx},${gy}`) : false;
+}
+
 export function towerStats(tw, w) {
   const def = TOWER_DEFS[tw.type];
   const lvl = tw.level;
@@ -94,10 +118,12 @@ export function towerStats(tw, w) {
   const lvlRange = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
   const lvlCd = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
   const buff = neighborBuffs(tw, w);
+  // T6 frozen terrain: tower placed on a frozen cell fires 40% slower.
+  const frozenMul = isFrozenCell(w, tw.gx, tw.gy) ? 1.4 : 1;
   return {
     dmg: def.dmg * lvlDmg * (1 + buff.dmgMul),
     range: def.range * lvlRange * (1 + buff.rangeMul),
-    cd: def.cd * lvlCd * (1 + buff.cdMul),
+    cd: def.cd * lvlCd * (1 + buff.cdMul) * frozenMul,
     splash: def.splash != null ? def.splash * (1 + buff.splashMul) : undefined,
     slow: def.slow,
     stun: def.stun,
@@ -105,6 +131,7 @@ export function towerStats(tw, w) {
     knockback: def.knockback,
     proj: def.proj,
     buff,
+    frozen: frozenMul > 1,
   };
 }
 

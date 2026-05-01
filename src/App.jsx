@@ -12,9 +12,11 @@ import Bestiary from './screens/Bestiary.jsx';
 import Achievements from './screens/Achievements.jsx';
 import { loadAchievementState } from './game/achievements.js';
 
-const PROGRESS_KEY = 'sweet-defense-progress-v1';
+// v2 introduced 60-level grid (vs old 6) — old saves are not migrated.
+const PROGRESS_KEY = 'sweet-defense-progress-v2';
 const ENDLESS_BEST_KEY = 'sd-endless-best-v1';
 const DAILY_BEST_KEY = 'sd-daily-best-v1';
+const DAILY_STREAK_KEY = 'sd-daily-streak-v1';
 
 function loadEndlessBest() {
   try { return parseInt(localStorage.getItem(ENDLESS_BEST_KEY) || '0', 10) || 0; } catch { return 0; }
@@ -33,6 +35,34 @@ function saveDailyScore(seed, score) {
       localStorage.setItem(DAILY_BEST_KEY, JSON.stringify(scores));
     }
   } catch {}
+}
+
+// Local-date string (YYYY-M-D); used as the "have I played today" key.
+function dateKey(d) {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+function loadDailyStreak() {
+  try {
+    const raw = localStorage.getItem(DAILY_STREAK_KEY);
+    if (!raw) return { count: 0, lastDate: null };
+    const parsed = JSON.parse(raw);
+    return { count: parsed.count || 0, lastDate: parsed.lastDate || null };
+  } catch { return { count: 0, lastDate: null }; }
+}
+// Bump streak on daily completion. Same-day repeats don't double-count;
+// missing yesterday resets back to 1.
+function bumpDailyStreak() {
+  const cur = loadDailyStreak();
+  const today = new Date();
+  const todayK = dateKey(today);
+  if (cur.lastDate === todayK) return cur;
+  const yesterdayK = dateKey(new Date(today.getTime() - 86400000));
+  const next = {
+    count: cur.lastDate === yesterdayK ? cur.count + 1 : 1,
+    lastDate: todayK,
+  };
+  try { localStorage.setItem(DAILY_STREAK_KEY, JSON.stringify(next)); } catch {}
+  return next;
 }
 
 function loadProgress() {
@@ -54,6 +84,21 @@ function computeStars(hp, startHp) {
   return 1;
 }
 
+// Theme-mastery: 25 of 30 stars in a theme unlocks the golden tower skin.
+// Returns Set<themeId>.
+function masteredThemesFromProgress(progress) {
+  const out = new Set();
+  for (let t = 1; t <= 6; t++) {
+    let sum = 0;
+    for (let s = 1; s <= 10; s++) {
+      const idx = (t - 1) * 10 + (s - 1);
+      sum += progress.stars?.[idx] || 0;
+    }
+    if (sum >= 25) out.add(t);
+  }
+  return out;
+}
+
 export default function App() {
   const [screen, setScreen] = useState('menu');
   const [stats, setStats] = useState(null);
@@ -61,7 +106,7 @@ export default function App() {
   const [progress, setProgress] = useState(loadProgress);
   const [playToken, setPlayToken] = useState(0); // bumps to remount Gameplay on retry
   const [activeLevel, setActiveLevel] = useState(null); // for endless/daily transient levels
-  const endlessUnlocked = (progress.unlocked || 1) >= 6 || (progress.stars || {})[5] > 0;
+  const [dailyStreak, setDailyStreak] = useState(() => loadDailyStreak());
 
   // Global UI click sound for any .bubble-btn or .shop-card.
   // Fires after React's onClick (native bubble), so the action runs first.
@@ -99,12 +144,21 @@ export default function App() {
     if (activeLevel) {
       // Endless or daily — there is no "win"; this only fires if endless somehow exhausts
       // (it shouldn't because waves are infinite). Treat as defeat with score.
-      setStats({ ...s, score: s.score, mode: activeLevel.endless ? 'endless' : 'daily' });
+      const next = { ...s, score: s.score, mode: activeLevel.endless ? 'endless' : 'daily' };
+      if (activeLevel.daily) {
+        saveDailyScore(activeLevel.seed, s.score);
+        const streak = bumpDailyStreak();
+        setDailyStreak(streak);
+        next.streak = streak.count;
+        next.dailyCompleted = true;
+      }
+      setStats(next);
       setScreen('defeat');
       return;
     }
     const lvl = LEVELS[levelIdx];
     const stars = computeStars(s.hp, lvl.startHp);
+    let masteryUnlocked = false;
     setProgress(prev => {
       const next = {
         ...prev,
@@ -112,9 +166,15 @@ export default function App() {
         unlocked: Math.max(prev.unlocked || 1, levelIdx + 2),
       };
       saveProgress(next);
+      // Detect first-time mastery on this win.
+      const before = masteredThemesFromProgress(prev);
+      const after = masteredThemesFromProgress(next);
+      if (lvl.themeId && !before.has(lvl.themeId) && after.has(lvl.themeId)) {
+        masteryUnlocked = true;
+      }
       return next;
     });
-    setStats({ ...s, stars });
+    setStats({ ...s, stars, masteryUnlocked, themeName: lvl.name?.split(' · ')[0] });
     setScreen('victory');
   }, [levelIdx, activeLevel]);
 
@@ -140,7 +200,7 @@ export default function App() {
       onAchievements={() => setScreen('achievements')}
       onEndless={startEndless}
       onDaily={startDaily}
-      endlessUnlocked={endlessUnlocked}
+      dailyStreak={dailyStreak}
     />;
   }
   if (screen === 'achievements') {
@@ -150,10 +210,14 @@ export default function App() {
     return <LevelSelect progress={progress} onPick={startLevel} onBack={() => setScreen('menu')} />;
   }
   if (screen === 'play') {
+    const lvl = activeLevel || LEVELS[levelIdx];
+    const masteredThemes = masteredThemesFromProgress(progress);
+    const themeMastered = lvl.themeId ? masteredThemes.has(lvl.themeId) : false;
     return (
       <Gameplay
         key={`${activeLevel ? activeLevel.id : levelIdx}-${playToken}`}
-        level={activeLevel || LEVELS[levelIdx]}
+        level={lvl}
+        themeMastered={themeMastered}
         onWin={handleWin}
         onLose={handleLose}
         onMenu={() => setScreen(activeLevel ? 'menu' : 'levels')}

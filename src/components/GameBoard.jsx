@@ -19,27 +19,38 @@ const DECOR_COMPONENTS = {
 };
 
 export default function GameBoard({
-  world, ghost, theme,
+  world, ghost, theme, themeMastered,
   svgRef,
   onCellClick, onCellRightClick, onTowerClick, onObstacleClick, onEnemyClick,
   onMouseMove, onMouseLeave,
 }) {
+  // Multi-path safe enemy position lookup.
+  const ePathOf = (e) => world.paths[e.pathIdx || 0];
+  // Theme-finale boss tint: rotate the bear's hue per theme so each L*-10 boss feels distinct.
+  // Only applied to bosses on level.subLevel === 10 to keep mid-campaign bosses uniform.
+  const BOSS_HUE = { 1: 0, 2: -25, 3: 100, 4: 240, 5: 30, 6: 180 };
+  const themeBossHue = (def, isThemeFinale) =>
+    def.boss && isThemeFinale ? (BOSS_HUE[world.level.themeId] || 0) : 0;
+
   const enemyEls = world.enemies.map(e => {
-    const ep = world.path.posAt(e.dist);
+    const ep = ePathOf(e).posAt(e.dist);
     const def = ENEMY_DEFS[e.type];
     const Comp = def.Comp;
     const baseSize = def.boss ? T * 1.2 : T * 0.78;
     const size = baseSize * (def.sizeMul || 1);
     const hpPct = e.hp / e.maxHp;
     const hpW = def.boss ? 70 : Math.round(44 * (def.sizeMul || 1));
+    const isFinale = world.level.subLevel === 10;
+    const hue = themeBossHue(def, isFinale);
+    const baseFilter = e.flash > 0
+      ? 'brightness(1.6) saturate(0.5)'
+      : `drop-shadow(0 ${def.boss ? 6 : 4}px ${def.boss ? 6 : 4}px rgba(60,40,32,0.45))`;
+    const filter = hue !== 0 ? `${baseFilter} hue-rotate(${hue}deg) saturate(1.2)` : baseFilter;
     return (
       <g
         key={e.id}
         transform={`translate(${ep.x} ${ep.y})`}
-        style={{
-          cursor: 'crosshair',
-          filter: e.flash > 0 ? 'brightness(1.6) saturate(0.5)' : `drop-shadow(0 ${def.boss ? 6 : 4}px ${def.boss ? 6 : 4}px rgba(60,40,32,0.45))`,
-        }}
+        style={{ cursor: 'crosshair', filter }}
         onClick={(ev) => { ev.stopPropagation(); onEnemyClick && onEnemyClick(e.id); }}
       >
         <g transform={`translate(${-size / 2} ${-size / 2})`}>
@@ -83,6 +94,16 @@ export default function GameBoard({
         {/* Soft ground contact shadow (extended for 3D depth) */}
         <ellipse cx={cx} cy={cy + 14} rx={T * 0.46} ry={T * 0.16} fill="rgba(60,40,32,0.30)" filter="url(#sd-blur)" />
         <ellipse cx={cx} cy={cy + 10} rx={T * 0.40} ry={T * 0.12} fill="rgba(60,40,32,0.18)" />
+
+        {/* Theme-mastery golden skin: full pulsing ring around towers when this theme is mastered. */}
+        {themeMastered && (
+          <>
+            <circle cx={cx} cy={cy} r={T * 0.52} fill="none" stroke="#F8E060" strokeWidth="3" opacity="0.9" strokeDasharray="6 3">
+              <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle cx={cx} cy={cy} r={T * 0.56} fill="none" stroke="#FFD45F" strokeWidth="1.5" opacity="0.45" />
+          </>
+        )}
 
         {/* Synergy halo for buffed towers */}
         {isBuffed && (
@@ -202,7 +223,7 @@ export default function GameBoard({
     let pos = null;
     if (f.kind === 'enemy') {
       const ent = world.enemies.find(e => e.id === f.id && !e.dead);
-      if (ent) pos = world.path.posAt(ent.dist);
+      if (ent) pos = ePathOf(ent).posAt(ent.dist);
     } else if (f.kind === 'obstacle') {
       const ob = world.obstacles.find(o => o.id === f.id);
       if (ob) pos = { x: ob.gx * T + T / 2, y: ob.gy * T + T / 2 };
@@ -398,39 +419,64 @@ export default function GameBoard({
 
       {decorationEls}
 
-      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathOuter} strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathInner} strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" opacity={pathInnerOpacity} />
-      {/* Optional conveyor stripes for L5 chocolate factory */}
-      {pathStyle && pathStyle.stripes && (
-        <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F8E060" strokeWidth={T * 0.05} strokeDasharray="14 14" strokeLinejoin="round" strokeLinecap="round" opacity="0.6" />
-      )}
-      {/* Optional ice cracks for L6 snow mountain */}
-      {pathStyle && pathStyle.cracks && (
-        <polyline points={world.path.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#7BB6E0" strokeWidth="1.2" strokeDasharray="3 6" strokeLinejoin="round" strokeLinecap="round" opacity="0.5" />
-      )}
+      {/* T6 frozen tile overlay — light blue tint with snowflake corner. */}
+      {(world.level.frozenCells || []).map(([gx, gy], i) => (
+        <g key={`frz-${i}`} style={{ pointerEvents: 'none' }}>
+          <rect
+            x={gx * T + 2} y={gy * T + 2}
+            width={T - 4} height={T - 4}
+            rx="6"
+            fill="rgba(176,220,238,0.45)"
+            stroke="rgba(123,182,224,0.7)"
+            strokeWidth="1.5"
+            strokeDasharray="3 3"
+          />
+          <text
+            x={gx * T + T - 14}
+            y={gy * T + 16}
+            fontSize="14"
+            opacity="0.85"
+          >❄</text>
+        </g>
+      ))}
 
-      {world.path.grid.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
+      {world.paths.map((pathObj, pIdx) => (
+        <g key={`path-${pIdx}`}>
+          <polyline points={pathObj.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathOuter} strokeWidth={T * 0.95} strokeLinejoin="round" strokeLinecap="round" />
+          <polyline points={pathObj.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={pathInner} strokeWidth={T * 0.78} strokeLinejoin="round" strokeLinecap="round" opacity={pathInnerOpacity} />
+          {pathStyle && pathStyle.stripes && (
+            <polyline points={pathObj.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#F8E060" strokeWidth={T * 0.05} strokeDasharray="14 14" strokeLinejoin="round" strokeLinecap="round" opacity="0.6" />
+          )}
+          {pathStyle && pathStyle.cracks && (
+            <polyline points={pathObj.points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#7BB6E0" strokeWidth="1.2" strokeDasharray="3 6" strokeLinejoin="round" strokeLinecap="round" opacity="0.5" />
+          )}
+        </g>
+      ))}
+
+      {world.paths.flatMap((pathObj, pIdx) => pathObj.grid.filter((_, i) => i % 2 === 0).map(([gx, gy], i) => {
         const cx = gx * T + T / 2, cy = gy * T + T / 2;
         return (
-          <g key={`sp${i}`}>
+          <g key={`sp${pIdx}-${i}`}>
             <rect x={cx - 18} y={cy - 12} width="6" height="2.5" rx="1.2" fill={sprinkleColors[i % sprinkleColors.length]} transform={`rotate(${(i * 37) % 180 - 90} ${cx - 15} ${cy - 11})`} />
             <rect x={cx + 10} y={cy + 8} width="6" height="2.5" rx="1.2" fill={sprinkleColors[(i + 2) % sprinkleColors.length]} transform={`rotate(${(i * 53) % 180 - 90} ${cx + 13} ${cy + 9})`} />
+          </g>
+        );
+      }))}
+
+      {/* Entry markers — one per path */}
+      {world.paths.map((pathObj, pIdx) => {
+        const p = pathObj.points[0];
+        return (
+          <g key={`entry-${pIdx}`}>
+            <circle cx={p.x - 18} cy={p.y} r="22" fill="#8FCFAE" stroke="white" strokeWidth="3" />
+            <text x={p.x - 18} y={p.y + 5} textAnchor="middle" fontSize="16" fontWeight="700" fill="white" fontFamily="Fredoka, sans-serif">起</text>
           </g>
         );
       })}
 
       {(() => {
-        const p = world.path.points[0];
-        return (
-          <g>
-            <circle cx={p.x - 18} cy={p.y} r="22" fill="#8FCFAE" stroke="white" strokeWidth="3" />
-            <text x={p.x - 18} y={p.y + 5} textAnchor="middle" fontSize="16" fontWeight="700" fill="white" fontFamily="Fredoka, sans-serif">起</text>
-          </g>
-        );
-      })()}
-
-      {(() => {
-        const p = world.path.points[world.path.points.length - 1];
+        // Castle is at the end of the (primary) path.
+        const p = world.paths[0].points[world.paths[0].points.length - 1];
         return (
           <g transform={`translate(${p.x + T / 2 - 50} ${p.y - 50})`}>
             <rect x="0" y="20" width="46" height="50" rx="4" fill="#FFE5EC" />
