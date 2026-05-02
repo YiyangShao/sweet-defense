@@ -86,13 +86,14 @@ const T1 = [
 ];
 
 // === Theme 2: 饼干森林 (multipath: dual entry) ===
+// All T2 levels use multipath so the theme's selling point shows up immediately.
 const T2 = [
-  { path: 'gentle-s', startSugar: 270, waves: [
-      mixed3('mouse','rabbit','hedgehog', 1.0),
-      mixed3('rabbit','squirrel','fox', 1.05),
-      bossWave('rabbit', 6, 1, 1.0),
+  // T2-1 — gentle dual-path intro (was single-path; now actually delivers on theme)
+  { paths: 'dual-A', startSugar: 290, waves: [
+      mixed2('mouse','rabbit', 0.9),
+      mixed3('mouse','rabbit','hedgehog', 0.95),
+      bossWave('rabbit', 6, 1, 0.95),
     ] },
-  // First dual-path level
   { paths: 'dual-A', startSugar: 280, waves: [
       mixed2('mouse','rabbit', 1.0),
       mixed3('mouse','rabbit','hedgehog', 1.0),
@@ -415,14 +416,23 @@ const T6 = [
       bossWave('fox', 8, 1, 2.05),
       bossWave('hedgehog', 6, 1, 2.05),
     ], frozenCells: FROZEN_PATTERN_C },
-  // T6 grand finale — final boss of the whole campaign
-  { path: 'descend-flip', startSugar: 420, waves: [
-      mixed4('rabbit','fox','squirrel','hedgehog', 2.0),
-      healerEscort(1.7),
-      armoredPush(2.0),
-      mixed4('mouse','rabbit','fox','raccoon', 2.05),
-      mixed4('rabbit','fox','hedgehog','squirrel', 2.05),
-      bossFinaleWave([['mouse', 16], ['rabbit', 10], ['fox', 8], ['hedgehog', 6], ['shielded', 5], ['splitter', 3], ['healer', 3]], 2.0),
+  // T6 grand finale — final campaign boss. Re-paced for casual play:
+  // breather wave 3, lighter pre-finale, finale split into staged escort + boss
+  // (scale 1.5 not 2.0) so the curve is sawtooth rather than a vertical wall.
+  { path: 'descend-flip', startSugar: 460, waves: [
+      mixed4('rabbit','fox','squirrel','hedgehog', 1.7),
+      healerEscort(1.4),
+      mixed3('mouse','rabbit','fox', 1.3),
+      armoredPush(1.6),
+      mixed4('rabbit','fox','hedgehog','squirrel', 1.7),
+      // Staged finale: heavy escort first…
+      bossFinaleWave([['mouse', 12], ['rabbit', 8], ['fox', 6], ['hedgehog', 4]], 1.5),
+      // …then the real BOSS encounter (single bear + minions).
+      [
+        { type: 'shielded', count: 4, interval: 1.6, delay: 0 },
+        { type: 'splitter', count: 2, interval: 3.0, delay: 4 },
+        { type: 'bear', count: 1, interval: 1, delay: 10 },
+      ],
     ], frozenCells: FROZEN_PATTERN_C },
 ];
 

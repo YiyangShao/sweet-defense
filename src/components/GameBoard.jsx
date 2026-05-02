@@ -4,7 +4,7 @@ import {
   MacaronTree, LollipopFlower, CookieBush, JellyCube, MarshmallowCloud,
   GearCookie, IcePine, StarTwinkle, ChocoPot,
 } from '../art/decorations.jsx';
-import { towerStats, neighborBuffs } from '../game/world.js';
+import { towerStats, neighborBuffs, isFrozenCell } from '../game/world.js';
 
 const DECOR_COMPONENTS = {
   macaronTree: MacaronTree,
@@ -268,6 +268,30 @@ export default function GameBoard({
     const Comp = def.Comp;
     const cx = ghost.gx * T + T / 2, cy = ghost.gy * T + T / 2;
     const valid = ghost.valid;
+
+    // Preview hints: frozen-cell trade-off + synergy buff from existing neighbours.
+    const hints = [];
+    if (!isWall && valid) {
+      if (isFrozenCell(world, ghost.gx, ghost.gy)) {
+        hints.push({ icon: '❄', text: '射程+15% · 射速-29%', color: '#5A8FB8' });
+      }
+      // Compute synergy by faking a tower at the hover cell and reading neighbour buffs.
+      const fakeTower = { id: -1, type: ghost.type, gx: ghost.gx, gy: ghost.gy };
+      const buff = neighborBuffs(fakeTower, world);
+      if (buff.count > 0) {
+        const parts = [];
+        if (buff.dmgMul) parts.push(`攻+${(buff.dmgMul * 100).toFixed(0)}%`);
+        if (buff.rangeMul) parts.push(`程+${(buff.rangeMul * 100).toFixed(0)}%`);
+        if (buff.cdMul) parts.push(`速+${(-buff.cdMul * 100).toFixed(0)}%`);
+        if (buff.splashMul) parts.push(`范+${(buff.splashMul * 100).toFixed(0)}%`);
+        if (parts.length) hints.push({ icon: '✦', text: parts.join(' '), color: '#8B5E3C', bg: '#FFF1C4' });
+      }
+    }
+    // Position hint pill above the cell, but flip to below if at the top edge.
+    const aboveTop = ghost.gy <= 0;
+    const hintBaseY = aboveTop ? ghost.gy * T + T + 8 : ghost.gy * T - 22;
+    const hintLineH = 18;
+
     return (
       <g style={{ pointerEvents: 'none' }}>
         {!isWall && (
@@ -277,6 +301,22 @@ export default function GameBoard({
         <g transform={`translate(${cx - T / 2} ${cy - T / 2 - 4})`} opacity="0.7">
           <Comp size={T} />
         </g>
+        {hints.map((h, i) => {
+          const y = hintBaseY + (aboveTop ? i : -i) * hintLineH;
+          return (
+            <g key={`hint-${i}`}>
+              <rect
+                x={cx - 78} y={y - 13} width={156} height={18} rx="9"
+                fill={h.bg || 'white'} stroke={h.color} strokeWidth="1.5"
+                opacity="0.95"
+              />
+              <text x={cx} y={y} textAnchor="middle" fontSize="11" fontWeight="700"
+                    fill={h.color} fontFamily="Fredoka, sans-serif">
+                {h.icon} {h.text}
+              </text>
+            </g>
+          );
+        })}
       </g>
     );
   })();

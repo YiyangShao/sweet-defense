@@ -118,20 +118,26 @@ export function towerStats(tw, w) {
   const lvlRange = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
   const lvlCd = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
   const buff = neighborBuffs(tw, w);
-  // T6 frozen terrain: tower placed on a frozen cell fires 40% slower.
-  const frozenMul = isFrozenCell(w, tw.gx, tw.gy) ? 1.4 : 1;
+  // T6 frozen terrain — *trade-off*, not pure debuff.
+  // Cooldown ×1.4 (slower fire) but range ×1.15 and splash ×1.15.
+  // Player picks frozen cells as long-range sniper / AOE perches; warm cells
+  // remain the DPS perches. Real choice instead of trap.
+  const isFrozen = isFrozenCell(w, tw.gx, tw.gy);
+  const frozenCdMul = isFrozen ? 1.4 : 1;
+  const frozenRangeMul = isFrozen ? 1.15 : 1;
+  const frozenSplashMul = isFrozen ? 1.15 : 1;
   return {
     dmg: def.dmg * lvlDmg * (1 + buff.dmgMul),
-    range: def.range * lvlRange * (1 + buff.rangeMul),
-    cd: def.cd * lvlCd * (1 + buff.cdMul) * frozenMul,
-    splash: def.splash != null ? def.splash * (1 + buff.splashMul) : undefined,
+    range: def.range * lvlRange * (1 + buff.rangeMul) * frozenRangeMul,
+    cd: def.cd * lvlCd * (1 + buff.cdMul) * frozenCdMul,
+    splash: def.splash != null ? def.splash * (1 + buff.splashMul) * frozenSplashMul : undefined,
     slow: def.slow,
     stun: def.stun,
     chainBounce: def.chainBounce,
     knockback: def.knockback,
     proj: def.proj,
     buff,
-    frozen: frozenMul > 1,
+    frozen: isFrozen,
   };
 }
 

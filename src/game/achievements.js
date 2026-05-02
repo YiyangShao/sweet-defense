@@ -6,34 +6,58 @@
 
 const STORAGE_KEY = 'sd-achievements-v1';
 
+// Achievements re-tiered for the 60-level / 6-theme campaign.
+// Old "通关 6 关" trophies retired; new mastery and theme-finale tier added.
 export const ACHIEVEMENTS = [
-  { id: 'first_clear',    name: '初尝甜蜜',     desc: '通关任意一关',          icon: '🥇', metric: 'levelsWon',    target: 1 },
-  { id: 'three_clears',   name: '老练守护',     desc: '通关 3 个关卡',         icon: '🛡️', metric: 'levelsWon',    target: 3 },
-  { id: 'all_clears',     name: '糖果国王',     desc: '通关所有 6 关',         icon: '👑', metric: 'levelsWon',    target: 6 },
+  // Campaign progression (60 levels / 180 stars total)
+  { id: 'first_clear',    name: '初尝甜蜜',     desc: '通关任意一关',          icon: '🥇', metric: 'levelsWon',     target: 1 },
+  { id: 'clears_10',      name: '小有所成',     desc: '通关 10 个关卡',        icon: '🛡️', metric: 'levelsWon',     target: 10 },
+  { id: 'clears_30',      name: '半途辉煌',     desc: '通关 30 个关卡',        icon: '🎖️', metric: 'levelsWon',     target: 30 },
+  { id: 'clears_60',      name: '甜点大师',     desc: '通关全部 60 关',        icon: '👑', metric: 'levelsWon',     target: 60 },
 
-  { id: 'kill_50',        name: '小英雄',       desc: '累计击败 50 只小动物',  icon: '🐭', metric: 'kills',        target: 50 },
-  { id: 'kill_500',       name: '糖果守护神',   desc: '累计击败 500 只小动物', icon: '⚔️',  metric: 'kills',        target: 500 },
-  { id: 'kill_2000',      name: '动物图鉴员',   desc: '累计击败 2000 只小动物',icon: '📕', metric: 'kills',        target: 2000 },
+  // Theme mastery (≥25 stars in a theme)
+  { id: 'mastery_first',  name: '初窥精通',     desc: '精通任意一个主题',      icon: '✨', metric: 'masteredThemes', target: 1 },
+  { id: 'mastery_three',  name: '三连大师',     desc: '精通 3 个主题',         icon: '🌟', metric: 'masteredThemes', target: 3 },
+  { id: 'mastery_all',    name: '全主题宗师',   desc: '精通全部 6 个主题',     icon: '🏆', metric: 'masteredThemes', target: 6 },
 
-  { id: 'boss_1',         name: 'BOSS 猎人',    desc: '击败一次蜜熊王',        icon: '🐻', metric: 'bossKills',    target: 1 },
-  { id: 'boss_10',        name: '熊语者',       desc: '累计击败 10 次蜜熊王',  icon: '🍯', metric: 'bossKills',    target: 10 },
+  // Stars
+  { id: 'stars_30',       name: '星光初闪',     desc: '累计获得 30 ⭐',         icon: '⭐', metric: 'starsTotal',    target: 30 },
+  { id: 'stars_90',       name: '星河璀璨',     desc: '累计获得 90 ⭐',         icon: '🌠', metric: 'starsTotal',    target: 90 },
+  { id: 'stars_180',      name: '满天星海',     desc: '集齐全部 180 ⭐',        icon: '🌌', metric: 'starsTotal',    target: 180 },
 
-  { id: 'place_50',       name: '建筑师',       desc: '累计放置 50 座防御塔',  icon: '🏗️', metric: 'placed',       target: 50 },
-  { id: 'place_300',      name: '都市规划师',   desc: '累计放置 300 座防御塔', icon: '🏰', metric: 'placed',       target: 300 },
-  { id: 'upgrade_30',     name: '升级控',       desc: '累计升级 30 次',        icon: '⬆️', metric: 'upgrades',     target: 30 },
+  // Kills
+  { id: 'kill_50',        name: '小英雄',       desc: '累计击败 50 只小动物',  icon: '🐭', metric: 'kills',         target: 50 },
+  { id: 'kill_1000',      name: '糖果守护神',   desc: '累计击败 1000 只小动物',icon: '⚔️', metric: 'kills',         target: 1000 },
+  { id: 'kill_5000',      name: '动物图鉴员',   desc: '累计击败 5000 只小动物',icon: '📕', metric: 'kills',         target: 5000 },
 
-  { id: 'obs_10',         name: '清道夫',       desc: '打掉 10 块石头障碍',    icon: '🧹', metric: 'obstacles',    target: 10 },
-  { id: 'wall_5',         name: '糖墙工程',     desc: '放置 5 道糖墙',         icon: '🧱', metric: 'walls',        target: 5 },
+  // Boss
+  { id: 'boss_1',         name: 'BOSS 猎人',    desc: '击败一次蜜熊王',        icon: '🐻', metric: 'bossKills',     target: 1 },
+  { id: 'boss_10',        name: '熊语者',       desc: '累计击败 10 次蜜熊王',  icon: '🍯', metric: 'bossKills',     target: 10 },
+  { id: 'boss_30',        name: '熊王终结',     desc: '累计击败 30 次蜜熊王',  icon: '🪓', metric: 'bossKills',     target: 30 },
 
-  { id: 'combo_5',        name: '小爆发',       desc: '达成 5 连击',           icon: '🎯', metric: 'maxCombo',     target: 5 },
-  { id: 'combo_15',       name: '连击大师',     desc: '达成 15 连击',          icon: '🔥', metric: 'maxCombo',     target: 15 },
-  { id: 'combo_30',       name: '甜蜜风暴',     desc: '达成 30 连击',          icon: '🌪️', metric: 'maxCombo',     target: 30 },
+  // Building
+  { id: 'place_100',      name: '建筑师',       desc: '累计放置 100 座防御塔', icon: '🏗️', metric: 'placed',        target: 100 },
+  { id: 'place_500',      name: '都市规划师',   desc: '累计放置 500 座防御塔', icon: '🏰', metric: 'placed',        target: 500 },
+  { id: 'upgrade_50',     name: '升级控',       desc: '累计升级 50 次',        icon: '⬆️', metric: 'upgrades',      target: 50 },
 
+  // Sub-systems
+  { id: 'obs_20',         name: '清道夫',       desc: '打掉 20 块石头障碍',    icon: '🧹', metric: 'obstacles',     target: 20 },
+  { id: 'wall_10',        name: '糖墙工程',     desc: '放置 10 道糖墙',        icon: '🧱', metric: 'walls',         target: 10 },
+
+  // Combo
+  { id: 'combo_5',        name: '小爆发',       desc: '达成 5 连击',           icon: '🎯', metric: 'maxCombo',      target: 5 },
+  { id: 'combo_15',       name: '连击大师',     desc: '达成 15 连击',          icon: '🔥', metric: 'maxCombo',      target: 15 },
+  { id: 'combo_30',       name: '甜蜜风暴',     desc: '达成 30 连击',          icon: '🌪️', metric: 'maxCombo',      target: 30 },
+
+  // Endless / daily
   { id: 'endless_10',     name: '星空旅者',     desc: '无尽模式坚持到第 10 波',icon: '⭐', metric: 'maxEndlessWave', target: 10 },
   { id: 'endless_25',     name: '银河捍卫者',   desc: '无尽模式坚持到第 25 波',icon: '🌌', metric: 'maxEndlessWave', target: 25 },
-  { id: 'daily_done',     name: '每日打卡',     desc: '完成一次每日挑战',      icon: '📆', metric: 'dailyRuns',    target: 1 },
+  { id: 'endless_50',     name: '宇宙神话',     desc: '无尽模式坚持到第 50 波',icon: '🛸', metric: 'maxEndlessWave', target: 50 },
+  { id: 'daily_done',     name: '每日打卡',     desc: '完成一次每日挑战',      icon: '📆', metric: 'dailyRuns',     target: 1 },
+  { id: 'daily_streak_7', name: '连续打卡 7 天', desc: '每日挑战连续 7 天',     icon: '🔥', metric: 'dailyStreak',   target: 7 },
 
-  { id: 'perfect_clear',  name: '不破金身',     desc: '通关时生命满格',        icon: '💖', metric: 'perfectRuns',  target: 1 },
+  // Polish achievements
+  { id: 'perfect_clear',  name: '不破金身',     desc: '通关时生命满格',        icon: '💖', metric: 'perfectRuns',   target: 1 },
 ];
 
 export function defaultStats() {
@@ -48,7 +72,10 @@ export function defaultStats() {
     levelsWon: 0,
     maxEndlessWave: 0,
     dailyRuns: 0,
+    dailyStreak: 0,        // mirrored from streak system on daily completion
     perfectRuns: 0,
+    starsTotal: 0,         // mirrored from progress.stars on each campaign win
+    masteredThemes: 0,     // count of themes with ≥25 ⭐ (mirrored on win)
   };
 }
 
@@ -107,6 +134,15 @@ export function processEvents(events, state, extra = {}) {
     s.maxEndlessWave = extra.endlessWave;
   }
   if (extra.dailyDone) s.dailyRuns += 1;
+  if (extra.dailyStreak && extra.dailyStreak > s.dailyStreak) {
+    s.dailyStreak = extra.dailyStreak;
+  }
+  if (extra.starsTotal && extra.starsTotal > s.starsTotal) {
+    s.starsTotal = extra.starsTotal;
+  }
+  if (extra.masteredThemes && extra.masteredThemes > s.masteredThemes) {
+    s.masteredThemes = extra.masteredThemes;
+  }
 
   // Re-check achievements against updated stats.
   for (const a of ACHIEVEMENTS) {

@@ -9,21 +9,21 @@ function emit(w, type, payload = {}) {
 
 // Per-run difficulty multiplier applied to enemy HP / shield / wallDps / reward.
 // Scales by theme + sub-level + wave so 60-level progression feels graded.
-// Tuned so T1-1 W1 = 1.0 (baseline) and T6-10 W7 ≈ 3.77; endless via sqrt.
+// Tuned for "casual-friendly" mode: T1-1 W1 = 1.0, T6-10 W7 ≈ 2.85 (was 3.77).
 export function difficultyScale(level, waveIdx) {
   const idx = Math.max(0, waveIdx);
   if (level.endless) {
-    return 1.15 * (1 + Math.sqrt(idx) * 0.4);
+    return 1.10 * (1 + Math.sqrt(idx) * 0.35);
   }
   if (level.daily) {
-    return 1.25 * (1 + idx * 0.07);
+    return 1.20 * (1 + idx * 0.06);
   }
-  const THEME_MUL = { 1: 1.00, 2: 1.15, 3: 1.30, 4: 1.50, 5: 1.70, 6: 1.95 };
+  const THEME_MUL = { 1: 1.00, 2: 1.12, 3: 1.25, 4: 1.40, 5: 1.55, 6: 1.75 };
   const themeId = level.themeId || (typeof level.id === 'number' ? level.id : null);
   const base = (themeId && THEME_MUL[themeId]) || 1;
   // Sub-level inside a theme adds a gentle bump so L*-10 isn't trivial.
-  const sub = 1 + ((level.subLevel || 1) - 1) * 0.04;
-  return base * sub * (1 + idx * 0.06);
+  const sub = 1 + ((level.subLevel || 1) - 1) * 0.03;
+  return base * sub * (1 + idx * 0.05);
 }
 
 // Path helper exports — used elsewhere too. Defaults to path 0 for safety.

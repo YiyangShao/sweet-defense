@@ -10,7 +10,7 @@ import Victory from './screens/Victory.jsx';
 import Defeat from './screens/Defeat.jsx';
 import Bestiary from './screens/Bestiary.jsx';
 import Achievements from './screens/Achievements.jsx';
-import { loadAchievementState } from './game/achievements.js';
+import { loadAchievementState, saveAchievementState, processEvents } from './game/achievements.js';
 
 // v2 introduced 60-level grid (vs old 6) — old saves are not migrated.
 const PROGRESS_KEY = 'sweet-defense-progress-v2';
@@ -79,8 +79,9 @@ function saveProgress(p) {
 
 function computeStars(hp, startHp) {
   const pct = hp / startHp;
-  if (pct >= 0.85) return 3;
-  if (pct >= 0.5) return 2;
+  // Casual-friendly thresholds (was 0.85 / 0.50).
+  if (pct >= 0.70) return 3;
+  if (pct >= 0.40) return 2;
   return 1;
 }
 
@@ -151,6 +152,10 @@ export default function App() {
         setDailyStreak(streak);
         next.streak = streak.count;
         next.dailyCompleted = true;
+        // Mirror dailyStreak to achievement stats so daily_streak_7 can unlock.
+        const ach = loadAchievementState();
+        processEvents([], ach, { dailyStreak: streak.count });
+        saveAchievementState(ach);
       }
       setStats(next);
       setScreen('defeat');
@@ -172,6 +177,15 @@ export default function App() {
       if (lvl.themeId && !before.has(lvl.themeId) && after.has(lvl.themeId)) {
         masteryUnlocked = true;
       }
+      // Mirror cumulative campaign stats into achievement state so the
+      // post-expansion achievements (stars_*, mastery_*) can unlock.
+      const totalStars = Object.values(next.stars || {}).reduce((a, b) => a + b, 0);
+      const ach = loadAchievementState();
+      processEvents([], ach, {
+        starsTotal: totalStars,
+        masteredThemes: after.size,
+      });
+      saveAchievementState(ach);
       return next;
     });
     setStats({ ...s, stars, masteryUnlocked, themeName: lvl.name?.split(' · ')[0] });

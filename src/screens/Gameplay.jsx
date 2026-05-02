@@ -12,6 +12,7 @@ import TowerShop from '../components/TowerShop.jsx';
 import TowerDetailModal from '../components/TowerDetailModal.jsx';
 import AchievementToast from '../components/AchievementToast.jsx';
 import TutorialOverlay from '../components/TutorialOverlay.jsx';
+import MechanicIntroOverlay, { shouldShowMechanicIntro, markMechanicIntroSeen } from '../components/MechanicIntroOverlay.jsx';
 
 const TUTORIAL_KEY = 'sd-tutorial-done-v1';
 
@@ -25,12 +26,27 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
   const achStateRef = useRef(loadAchievementState());
   const lastEventIdxRef = useRef(0);
   const [showTutorial, setShowTutorial] = useState(() => {
-    if (level.id !== 1) return false;
+    // Only T1-1 (campaign first level) shows the tutorial. After 60-level
+    // expansion level.id is a string like "1-1" — the prior numeric check
+    // never matched, so the tutorial silently never fired.
+    if (level.id !== '1-1') return false;
     try { return localStorage.getItem(TUTORIAL_KEY) !== '1'; } catch { return false; }
   });
   const dismissTutorial = () => {
     try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch {}
     setShowTutorial(false);
+  };
+
+  // Per-theme mechanic intro: shown on first entry into any theme with a unique
+  // mechanic (T2-T6). The JSX guard `!showTutorial && showMechanicIntro` ensures
+  // the L1 tutorial gets priority when both could fire on T1-1.
+  const [showMechanicIntro, setShowMechanicIntro] = useState(() => {
+    if (!level.themeId) return false;        // endless / daily — no theme intro
+    return shouldShowMechanicIntro(level.themeId);
+  });
+  const dismissMechanicIntro = () => {
+    if (level.themeId) markMechanicIntroSeen(level.themeId);
+    setShowMechanicIntro(false);
   };
   const onMute = () => setMuted(toggleMute());
 
@@ -337,6 +353,9 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
       )}
       <AchievementToast unlocks={toastUnlocks} onDismiss={() => setToastUnlocks([])} />
       {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
+      {!showTutorial && showMechanicIntro && (
+        <MechanicIntroOverlay themeId={level.themeId} onDismiss={dismissMechanicIntro} />
+      )}
     </div>
   );
 }
