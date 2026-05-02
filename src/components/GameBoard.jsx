@@ -5,6 +5,7 @@ import {
   GearCookie, IcePine, StarTwinkle, ChocoPot,
 } from '../art/decorations.jsx';
 import { towerStats, neighborBuffs, isFrozenCell } from '../game/world.js';
+import TowerActionPopover from './TowerActionPopover.jsx';
 
 const DECOR_COMPONENTS = {
   macaronTree: MacaronTree,
@@ -23,6 +24,7 @@ export default function GameBoard({
   svgRef,
   onCellClick, onCellRightClick, onTowerClick, onObstacleClick, onEnemyClick,
   onMouseMove, onMouseLeave,
+  onUpgrade, onSell,
 }) {
   // Multi-path safe enemy position lookup.
   const ePathOf = (e) => world.paths[e.pathIdx || 0];
@@ -168,11 +170,13 @@ export default function GameBoard({
     );
   });
 
+  // All visual-only layers below are pointer-events: none so they never
+  // intercept clicks intended for towers/enemies/obstacles underneath.
   const projectileEls = world.projectiles.map(p => {
     const x = p.fromX + (p.toX - p.fromX) * p.t;
     const y = p.fromY + (p.toY - p.fromY) * p.t;
     return (
-      <g key={p.id}>
+      <g key={p.id} style={{ pointerEvents: 'none' }}>
         <line x1={p.fromX} y1={p.fromY} x2={x} y2={y} stroke={p.color} strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
         <circle cx={x} cy={y} r={p.size + 3} fill={p.color} opacity="0.35" />
         <circle cx={x} cy={y} r={p.size} fill={p.color} />
@@ -186,7 +190,7 @@ export default function GameBoard({
     const pt = f.t / f.dur;
     const r = 18 * (1 + pt * 1.3);
     return (
-      <g key={f.id}>
+      <g key={f.id} style={{ pointerEvents: 'none' }}>
         <circle cx={f.x} cy={f.y} r={r} fill={f.color} opacity={(1 - pt) * 0.55} />
         <circle cx={f.x} cy={f.y} r={r * 0.55} fill="white" opacity={(1 - pt) * 0.85} />
       </g>
@@ -197,7 +201,7 @@ export default function GameBoard({
   const burstEls = world.bursts.map(b => {
     const pt = b.t / b.dur;
     return (
-      <g key={b.id}>
+      <g key={b.id} style={{ pointerEvents: 'none' }}>
         {b.particles.map((p, i) => {
           const dx = Math.cos(p.angle) * p.speed * pt;
           const dy = Math.sin(p.angle) * p.speed * pt + 28 * pt * pt;
@@ -245,7 +249,7 @@ export default function GameBoard({
   })();
 
   const floatEls = world.floats.map(f => (
-    <g key={f.id} transform={`translate(${f.x} ${f.y - f.t * 50})`} style={{ opacity: 1 - f.t / 0.7 }}>
+    <g key={f.id} transform={`translate(${f.x} ${f.y - f.t * 50})`} style={{ opacity: 1 - f.t / 0.7, pointerEvents: 'none' }}>
       <text textAnchor="middle" fontFamily="Fredoka, sans-serif" fontWeight="700" fontSize={f.text === '闪避' ? 16 : 22} fill={f.color}
             stroke="white" strokeWidth="3" paintOrder="stroke">
         {f.text}
@@ -439,6 +443,11 @@ export default function GameBoard({
           <stop offset="75%"  stopColor="#B79CD1" />
           <stop offset="100%" stopColor="#F58CA6" />
         </linearGradient>
+        {/* Pink → deep pink gradient for the upgrade pill */}
+        <linearGradient id="sd-upgrade-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"  stopColor="#FFB5C5" />
+          <stop offset="100%" stopColor="#F58CA6" />
+        </linearGradient>
         <filter id="sd-blur" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="2.4" />
         </filter>
@@ -539,6 +548,15 @@ export default function GameBoard({
       {burstEls}
       {focusEl}
       {floatEls}
+      {selectedTw && onUpgrade && onSell && (
+        <TowerActionPopover
+          tower={selectedTw}
+          world={world}
+          sugar={world.sugar}
+          onUpgrade={onUpgrade}
+          onSell={onSell}
+        />
+      )}
     </svg>
   );
 }

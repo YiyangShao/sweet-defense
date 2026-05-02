@@ -9,7 +9,6 @@ import GameBoard from '../components/GameBoard.jsx';
 import HUD from '../components/HUD.jsx';
 import WavePreview from '../components/WavePreview.jsx';
 import TowerShop from '../components/TowerShop.jsx';
-import TowerDetailModal from '../components/TowerDetailModal.jsx';
 import AchievementToast from '../components/AchievementToast.jsx';
 import TutorialOverlay from '../components/TutorialOverlay.jsx';
 import MechanicIntroOverlay, { shouldShowMechanicIntro, markMechanicIntroSeen } from '../components/MechanicIntroOverlay.jsx';
@@ -288,11 +287,6 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
     forceTick(t => t + 1);
   };
 
-  const onCloseModal = () => {
-    w.selectedPlacedTower = null;
-    forceTick(t => t + 1);
-  };
-
   const ghost = (() => {
     if (!w.selectedTowerType || !hover) return null;
     if (w.selectedTowerType === 'wall') {
@@ -307,8 +301,6 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
       && w.sugar >= TOWER_DEFS[w.selectedTowerType].cost;
     return { kind: 'tower', type: w.selectedTowerType, gx: hover.gx, gy: hover.gy, valid };
   })();
-
-  const selectedTw = w.selectedPlacedTower != null ? w.towers.find(t => t.id === w.selectedPlacedTower) : null;
 
   return (
     <div className="full" style={{ position: 'relative', overflow: 'hidden', background: level.bgPrimary }}>
@@ -326,6 +318,8 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
           onEnemyClick={onEnemyClick}
           onMouseMove={onMouseMove}
           onMouseLeave={onMouseLeave}
+          onUpgrade={onUpgrade}
+          onSell={onSell}
         />
       </div>
       <HUD world={w} totalWaves={level.waves.length} onPause={onPause} onSpeed={onSpeed} onMenu={onMenu} muted={muted} onMute={onMute} />
@@ -336,16 +330,6 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
         onSelect={onShopSelect}
         availableTowers={level.availableTowers}
       />
-      {selectedTw && (
-        <TowerDetailModal
-          tower={selectedTw}
-          world={w}
-          sugar={w.sugar}
-          onUpgrade={onUpgrade}
-          onSell={onSell}
-          onClose={onCloseModal}
-        />
-      )}
       {w.speed === 0 && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(40,28,24,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 7, pointerEvents: 'none' }}>
           <div className="font-display" style={{ fontSize: 88, color: 'white', textShadow: '0 4px 20px rgba(0,0,0,0.4)' }}>⏸ 暂停</div>
