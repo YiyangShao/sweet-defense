@@ -4,6 +4,7 @@
 import { THEMES } from './themes.js';
 import { getPath, DUAL_PATHS_BY_ID } from './paths.js';
 import { RAW_CAMPAIGN_BY_THEME } from './campaign.js';
+import { levelTowerPool } from './towerPools.js';
 
 function resolveLevel(themeId, subIdx, raw) {
   const theme = THEMES[themeId];
@@ -20,6 +21,9 @@ function resolveLevel(themeId, subIdx, raw) {
   } else {
     throw new Error(`Level ${themeId}-${subLevel} missing path/paths`);
   }
+  // Per-level tower pool (introduces towers gradually). Wall is always present.
+  const pool = levelTowerPool(themeId, subLevel);
+  const availableTowers = [...pool, 'wall'];
   return {
     id: `${themeId}-${subLevel}`,
     themeId,
@@ -32,7 +36,7 @@ function resolveLevel(themeId, subIdx, raw) {
     pathStyle: theme.pathStyle,
     pathGrid,
     paths,                       // [grid1, grid2] when multipath, else undefined
-    availableTowers: theme.availableTowers,
+    availableTowers,
     decorations: theme.decorations,
     obstacles: raw.obstacles || [],
     startSugar: raw.startSugar ?? 280,

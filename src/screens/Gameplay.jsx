@@ -12,6 +12,7 @@ import TowerShop from '../components/TowerShop.jsx';
 import AchievementToast from '../components/AchievementToast.jsx';
 import TutorialOverlay from '../components/TutorialOverlay.jsx';
 import MechanicIntroOverlay, { shouldShowMechanicIntro, markMechanicIntroSeen } from '../components/MechanicIntroOverlay.jsx';
+import TowerIntroOverlay, { unseenTowers, markTowerSeen } from '../components/TowerIntroOverlay.jsx';
 
 const TUTORIAL_KEY = 'sd-tutorial-done-v1';
 
@@ -46,6 +47,21 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
   const dismissMechanicIntro = () => {
     if (level.themeId) markMechanicIntroSeen(level.themeId);
     setShowMechanicIntro(false);
+  };
+
+  // Tower-introduction queue: any towers in the level pool the player has
+  // never seen pop one modal each, in order. Walls don't count.
+  const [towerIntroQueue, setTowerIntroQueue] = useState(() => {
+    if (!level.themeId) return [];          // endless / daily skip
+    const placeable = (level.availableTowers || []).filter(t => t !== 'wall');
+    return unseenTowers(placeable);
+  });
+  const dismissTowerIntro = () => {
+    setTowerIntroQueue(prev => {
+      if (!prev.length) return prev;
+      markTowerSeen(prev[0]);
+      return prev.slice(1);
+    });
   };
   const onMute = () => setMuted(toggleMute());
 
@@ -339,6 +355,13 @@ export default function Gameplay({ level, themeMastered, onWin, onLose, onMenu }
       {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
       {!showTutorial && showMechanicIntro && (
         <MechanicIntroOverlay themeId={level.themeId} onDismiss={dismissMechanicIntro} />
+      )}
+      {!showTutorial && !showMechanicIntro && towerIntroQueue.length > 0 && (
+        <TowerIntroOverlay
+          towerType={towerIntroQueue[0]}
+          remaining={towerIntroQueue.length - 1}
+          onDismiss={dismissTowerIntro}
+        />
       )}
     </div>
   );

@@ -190,6 +190,22 @@ export default function GameBoard({
   // All visual-only layers below are pointer-events: none so they never
   // intercept clicks intended for towers/enemies/obstacles underneath.
   const projectileEls = world.projectiles.map(p => {
+    // Pierce projectile (macaron): physical line traveller. Render as a fast-
+    // moving sprite with a trail behind it.
+    if (p.pierce) {
+      const x = p.x, y = p.y;
+      const tailLen = 32;
+      const tailX = x - p.ux * tailLen, tailY = y - p.uy * tailLen;
+      return (
+        <g key={p.id} style={{ pointerEvents: 'none' }}>
+          <line x1={tailX} y1={tailY} x2={x} y2={y} stroke={p.color} strokeWidth="6" strokeLinecap="round" opacity="0.35" />
+          <line x1={tailX} y1={tailY} x2={x} y2={y} stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.85" />
+          <circle cx={x} cy={y} r={p.size + 3} fill={p.color} opacity="0.45" />
+          <circle cx={x} cy={y} r={p.size} fill={p.color} />
+          <circle cx={x - 1.5} cy={y - 1.5} r={p.size - 3} fill="white" opacity="0.8" />
+        </g>
+      );
+    }
     // Boomerang has its own per-tick (x, y) computed in the engine.
     if (p.boomerang) {
       const x = p.x ?? p.fromX, y = p.y ?? p.fromY;
@@ -348,12 +364,42 @@ export default function GameBoard({
     );
   })();
 
+  // Compute the cells this tower's synergy would BUFF if placed at (gx, gy).
+  // Mirrors the geometries declared in world.js neighborBuffs.
+  const buffCellsForGhost = (geom, gx, gy) => {
+    const cells = [];
+    const inBounds = (x, y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
+    if (!geom) return cells;
+    const push = (dx, dy) => {
+      const x = gx + dx, y = gy + dy;
+      if ((dx !== 0 || dy !== 0) && inBounds(x, y)) cells.push([x, y]);
+    };
+    if (geom === 'neighbor8') {
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) push(dx, dy);
+    } else if (geom === 'orthogonal4') {
+      push(0, -1); push(-1, 0); push(1, 0); push(0, 1);
+    } else if (geom === 'diagonal4') {
+      push(-1, -1); push(1, -1); push(-1, 1); push(1, 1);
+    } else if (geom === 'row') {
+      for (let dx = -15; dx <= 15; dx++) push(dx, 0);
+    } else if (geom === 'column') {
+      for (let dy = -8; dy <= 8; dy++) push(0, dy);
+    } else if (geom === 'circle2') {
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+        if (dx * dx + dy * dy <= 4) push(dx, dy);
+      }
+    }
+    return cells;
+  };
+
   const ghostEl = ghost && (() => {
     const isWall = ghost.kind === 'wall';
     const def = isWall ? WALL_DEFS.wall : TOWER_DEFS[ghost.type];
     const Comp = def.Comp;
     const cx = ghost.gx * T + T / 2, cy = ghost.gy * T + T / 2;
     const valid = ghost.valid;
+    // Buff highlight cells for this ghost (only for towers, not walls).
+    const buffCells = !isWall && def.synergy ? buffCellsForGhost(def.synergy.geometry, ghost.gx, ghost.gy) : [];
 
     // Preview hints: frozen-cell trade-off + synergy buff from existing neighbours.
     const hints = [];
@@ -383,6 +429,13 @@ export default function GameBoard({
         {!isWall && (
           <circle cx={cx} cy={cy} r={def.range * T} fill={valid ? 'rgba(143,207,174,0.18)' : 'rgba(245,140,166,0.18)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="8 6" />
         )}
+        {/* Highlight cells this tower will buff via its synergy geometry */}
+        {valid && buffCells.map(([bx, by]) => (
+          <rect key={`bc-${bx}-${by}`}
+            x={bx * T + 6} y={by * T + 6}
+            width={T - 12} height={T - 12} rx="10"
+            fill="rgba(248,224,96,0.18)" stroke="#F8E060" strokeWidth="2" strokeDasharray="4 3" />
+        ))}
         <rect x={ghost.gx * T + 4} y={ghost.gy * T + 4} width={T - 8} height={T - 8} rx="14" fill={valid ? 'rgba(143,207,174,0.22)' : 'rgba(245,140,166,0.22)'} stroke={valid ? '#8FCFAE' : '#F58CA6'} strokeWidth="3" strokeDasharray="6 4" />
         <g transform={`translate(${cx - T / 2} ${cy - T / 2 - 4})`} opacity="0.7">
           <Comp size={T} />

@@ -288,45 +288,37 @@ function fireChainBounce(w, tw, stats, target) {
   spawnFlash(w, tx, ty, stats.proj);
 }
 
-// Beam: instant, pierces enemies along a line from tower toward primary target.
+// Pierce: a real, traveling projectile that flies in a straight line from the
+// tower in the chosen direction, hitting each enemy it touches once along the
+// way (with damage falloff per pierce). NOT instant — the player sees the
+// macaron physically fly across the board.
 function fireBeam(w, tw, stats, target) {
-  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
   const def = TOWER_DEFS[tw.type];
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
   const dx = target.pos.x - tx, dy = target.pos.y - ty;
   const len = Math.hypot(dx, dy);
   if (len === 0) return;
   const ux = dx / len, uy = dy / len;
   const rangePx = stats.range * T;
-  // Find enemies within thickness perpendicular to ray, projected length ≤ range
-  const thickness = T * 0.42;
-  const hits = [];
-  for (const e of w.enemies) {
-    if (e.dead || e.hp <= 0) continue;
-    const ep = posOf(w, e);
-    const rx = ep.x - tx, ry = ep.y - ty;
-    const along = rx * ux + ry * uy;          // signed projection
-    if (along < 0 || along > rangePx) continue;
-    const perp = Math.abs(rx * (-uy) + ry * ux);
-    if (perp > thickness) continue;
-    hits.push({ e, along, ep });
-  }
-  hits.sort((a, b) => a.along - b.along);
-  // Apply with falloff; beam stops at `pierce` enemies
-  let dmg = stats.dmg;
-  const opts = damageOpts(tw, stats);
-  const pierce = def.pierce || 4;
-  const falloff = def.pierceFalloff || 0.7;
-  let endX = tx + ux * rangePx, endY = ty + uy * rangePx;
-  for (let i = 0; i < hits.length && i < pierce; i++) {
-    applyDamage(w, hits[i].e, dmg, opts);
-    spawnBurst(w, hits[i].ep.x, hits[i].ep.y, stats.proj, 4, false);
-    if (i === Math.min(hits.length, pierce) - 1) { endX = hits[i].ep.x; endY = hits[i].ep.y; }
-    dmg *= falloff;
-  }
-  // Persistent beam visual (~0.18s)
-  w.beams = w.beams || [];
-  w.beams.push({ id: w.nextId++, fromX: tx, fromY: ty, toX: endX, toY: endY,
-    color: stats.proj, t: 0, dur: 0.18 });
+  w.projectiles.push({
+    id: w.nextId++,
+    pierce: true,                              // marker for tick-based hit logic
+    fromX: tx, fromY: ty,
+    angle: Math.atan2(dy, dx),
+    travelPx: rangePx,                         // total distance to fly
+    speedPx: 760,                              // px / sec — fast but visible
+    dmg: stats.dmg,
+    pierceCount: def.pierce || 4,
+    pierceFalloff: def.pierceFalloff || 0.7,
+    pierceLeft: def.pierce || 4,
+    color: stats.proj, size: 8,
+    opts: damageOpts(tw, stats),
+    towerType: tw.type,
+    hitIds: new Set(),
+    travelled: 0,
+    x: tx, y: ty,
+    ux, uy,
+  });
   spawnFlash(w, tx, ty, stats.proj);
 }
 
@@ -372,26 +364,28 @@ function fireChain(w, tw, stats, target) {
   spawnFlash(w, tx, ty, stats.proj);
 }
 
-// Boomerang: spawns a curving projectile that flies out, arcs around, and
-// comes back. Updated each tick in the projectile loop (special update logic).
+// Boomerang: spawns a circling projectile that orbits the tower in a full
+// 360° loop. Hits any enemy crossing the orbit ring, each enemy at most once.
+// Better than an arc — guarantees coverage in every direction.
 function fireBoomerang(w, tw, stats, target) {
   const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  // Orbit radius scales with effective range (clamped) — bigger tower → bigger circle.
+  const orbitR = Math.min(stats.range * T * 0.85, T * 2.6);
   const dx = target.pos.x - tx, dy = target.pos.y - ty;
-  const ang = Math.atan2(dy, dx);
-  const reach = Math.min(Math.hypot(dx, dy), stats.range * T);
+  const startAng = Math.atan2(dy, dx);
   w.projectiles.push({
     id: w.nextId++,
     boomerang: true,
-    fromX: tx, fromY: ty,
-    angle: ang,
-    reach,
-    arcWidth: T * 0.7,
-    t: 0, duration: 1.2,                // total flight time
+    centerX: tx, centerY: ty,
+    orbitR,
+    startAng,
+    t: 0, duration: 1.4,                // full circle in 1.4s
     color: stats.proj, size: 9,
     dmg: stats.dmg,
     opts: damageOpts(tw, stats),
     towerType: tw.type,
-    hitIds: new Set(),                  // each enemy hit at most twice (out + back)
+    hitIds: new Set(),
+    fromX: tx, fromY: ty,                // legacy fields for renderer fallback
   });
   spawnFlash(w, tx, ty, stats.proj);
 }
@@ -675,21 +669,41 @@ export function update(w, rawDt) {
 
   // === Projectile resolution ==============================================
   for (const p of w.projectiles) {
+    // Pierce projectile: physical line traveller that hits each enemy once
+    // along the way until pierce budget runs out or it exits range.
+    if (p.pierce) {
+      const step = p.speedPx * dt;
+      p.travelled += step;
+      p.x += p.ux * step;
+      p.y += p.uy * step;
+      const HIT_R = 26;
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0) continue;
+        if (p.hitIds.has(e.id)) continue;
+        const ep = posOf(w, e);
+        if (Math.hypot(ep.x - p.x, ep.y - p.y) <= HIT_R) {
+          p.hitIds.add(e.id);
+          applyDamage(w, e, p.dmg, p.opts);
+          spawnBurst(w, ep.x, ep.y, p.color, 4, false);
+          p.dmg *= p.pierceFalloff;
+          p.pierceLeft -= 1;
+          if (p.pierceLeft <= 0) { p.dead = true; break; }
+        }
+      }
+      if (p.travelled >= p.travelPx) p.dead = true;
+      continue;
+    }
+
     p.t += dt / p.duration;
 
-    // Boomerang: per-tick hit detection along its arc.
+    // Boomerang: orbits the tower in a full 360° circle, hits enemies the
+    // ring crosses (each enemy once). Guarantees coverage of every direction.
     if (p.boomerang) {
-      // Position: out for [0, 0.5], back for [0.5, 1]
-      const tt = p.t;
-      const phase = tt < 0.5 ? tt * 2 : (1 - tt) * 2;     // 0..1..0
-      const dist = phase * p.reach;
-      // sideways arc using sin curve
-      const lateral = Math.sin(phase * Math.PI) * p.arcWidth;
-      const fx = p.fromX + Math.cos(p.angle) * dist + Math.cos(p.angle + Math.PI / 2) * lateral;
-      const fy = p.fromY + Math.sin(p.angle) * dist + Math.sin(p.angle + Math.PI / 2) * lateral;
+      const ang = p.startAng + p.t * Math.PI * 2;
+      const fx = p.centerX + Math.cos(ang) * p.orbitR;
+      const fy = p.centerY + Math.sin(ang) * p.orbitR;
       p.x = fx; p.y = fy;
-      // Check overlap
-      const HIT_R = 22;
+      const HIT_R = 24;
       for (const e of w.enemies) {
         if (e.dead || e.hp <= 0) continue;
         if (p.hitIds.has(e.id)) continue;
@@ -700,7 +714,7 @@ export function update(w, rawDt) {
           spawnBurst(w, ep.x, ep.y, p.color, 4, false);
         }
       }
-      if (tt >= 1) p.dead = true;
+      if (p.t >= 1) p.dead = true;
       continue;
     }
 
