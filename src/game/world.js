@@ -31,6 +31,8 @@ export function initWorld(level) {
     floats: [],
     flashes: [],
     bursts: [],
+    beams: [],          // beam / chain-lightning visuals (short-lived lines)
+    shockwaves: [],     // icecream wave + banana charge-release rings
     selectedTowerType: null,
     selectedPlacedTower: null,
     focus: null,        // {kind: 'enemy'|'obstacle', id} — manual focus-fire target
@@ -79,32 +81,90 @@ export function isAnyPathCell(w, gx, gy) {
   return w.paths.some(p => p.isPathCell(gx, gy));
 }
 
-const NEIGHBOR_OFFSETS = [
+// Buff geometries — each tower's synergy declares which cells it reaches.
+// Cells are returned as [dx, dy] offsets relative to the buffing tower.
+const NEIGHBOR_8 = [
   [-1, -1], [0, -1], [1, -1],
   [-1,  0],          [1,  0],
   [-1,  1], [0,  1], [1,  1],
 ];
-
-// Compute additive synergy buffs from 8-neighbor towers + walls (walls don't
-// contribute synergy in Phase B but the lookup is shared).
-export function neighborBuffs(tw, w) {
-  let dmgMul = 0, rangeMul = 0, cdMul = 0, splashMul = 0;
-  let count = 0;
-  if (w && w.towers) {
-    for (const [dx, dy] of NEIGHBOR_OFFSETS) {
-      const nb = w.towers.find(t => t.id !== tw.id && t.gx === tw.gx + dx && t.gy === tw.gy + dy);
-      if (!nb) continue;
-      const ndef = TOWER_DEFS[nb.type];
-      const s = ndef && ndef.synergy;
-      if (!s) continue;
-      dmgMul += s.dmgMul || 0;
-      rangeMul += s.rangeMul || 0;
-      cdMul += s.cdMul || 0;
-      splashMul += s.splashMul || 0;
-      count += 1;
+const ORTHOGONAL_4 = [
+            [0, -1],
+  [-1,  0],          [1,  0],
+            [0,  1],
+];
+const DIAGONAL_4 = [
+  [-1, -1],          [1, -1],
+  [-1,  1],          [1,  1],
+];
+// Row / column / circle are computed dynamically from board dims.
+function rowOffsets() {
+  const out = [];
+  for (let dx = -15; dx <= 15; dx++) if (dx !== 0) out.push([dx, 0]);
+  return out;
+}
+function colOffsets() {
+  const out = [];
+  for (let dy = -8; dy <= 8; dy++) if (dy !== 0) out.push([0, dy]);
+  return out;
+}
+function circle2Offsets() {
+  const out = [];
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      if (dx * dx + dy * dy <= 4) out.push([dx, dy]);  // r=2 disc
     }
   }
-  return { dmgMul, rangeMul, cdMul, splashMul, count };
+  return out;
+}
+
+// Each geometry: from tower at (gx, gy), the cells it BUFFS are tw + offset.
+// To compute who buffs ME: I look at neighbours, ask whether their geometry
+// would emit me. So we store the offset table and check inversely.
+const GEOM_OFFSETS = {
+  neighbor8:    NEIGHBOR_8,
+  orthogonal4:  ORTHOGONAL_4,
+  diagonal4:    DIAGONAL_4,
+  row:          rowOffsets(),
+  column:       colOffsets(),
+  circle2:      circle2Offsets(),
+};
+
+function buffsFromGeometry(geom) {
+  return GEOM_OFFSETS[geom] || NEIGHBOR_8;
+}
+
+// All synergy fields a tower may emit.  Anything not listed defaults to 0.
+const SYNERGY_FIELDS = [
+  'dmgMul', 'rangeMul', 'cdMul', 'splashMul',
+  'critChance', 'multiShot', 'executeBonus',
+  'stunChance', 'stunDuration',
+  'statusDuration', 'slowFactor', 'dotDamage',
+  'knockback',
+];
+
+// Compute additive synergy buffs from neighbouring towers, respecting each
+// tower's `synergy.geometry` field (defaults to 8-neighbor).
+export function neighborBuffs(tw, w) {
+  const buff = SYNERGY_FIELDS.reduce((acc, k) => (acc[k] = 0, acc), {});
+  buff.count = 0;
+  if (!w || !w.towers) return buff;
+  for (const nb of w.towers) {
+    if (nb.id === tw.id) continue;
+    const ndef = TOWER_DEFS[nb.type];
+    const s = ndef && ndef.synergy;
+    if (!s) continue;
+    const offsets = buffsFromGeometry(s.geometry);
+    const reaches = offsets.some(([dx, dy]) =>
+      nb.gx + dx === tw.gx && nb.gy + dy === tw.gy);
+    if (!reaches) continue;
+    for (const k of SYNERGY_FIELDS) {
+      if (s[k] != null) buff[k] += s[k];
+    }
+    buff.count += 1;
+  }
+  return buff;
 }
 
 export function isFrozenCell(w, gx, gy) {
@@ -118,24 +178,38 @@ export function towerStats(tw, w) {
   const lvlRange = lvl === 1 ? 1 : lvl === 2 ? 1.12 : 1.25;
   const lvlCd = lvl === 1 ? 1 : lvl === 2 ? 0.92 : 0.82;
   const buff = neighborBuffs(tw, w);
-  // T6 frozen terrain — *trade-off*, not pure debuff.
-  // Cooldown ×1.4 (slower fire) but range ×1.15 and splash ×1.15.
-  // Player picks frozen cells as long-range sniper / AOE perches; warm cells
-  // remain the DPS perches. Real choice instead of trap.
   const isFrozen = isFrozenCell(w, tw.gx, tw.gy);
   const frozenCdMul = isFrozen ? 1.4 : 1;
   const frozenRangeMul = isFrozen ? 1.15 : 1;
   const frozenSplashMul = isFrozen ? 1.15 : 1;
+  // Status durations get extended by both the tower's own duration buff and by
+  // synergy-provided +duration / +stun-duration. Slow factor synergy LOWERS the
+  // factor (0.5 → 0.45 means slower enemies). Knockback adds flat distance.
+  const statusMul = 1 + (buff.statusDuration || 0);
+  const slowOut = def.slow ? {
+    factor: Math.max(0.05, def.slow.factor + (buff.slowFactor || 0)),
+    duration: def.slow.duration * statusMul,
+  } : undefined;
+  const stunOut = def.stun ? def.stun * statusMul + (buff.stunDuration || 0) : undefined;
   return {
     dmg: def.dmg * lvlDmg * (1 + buff.dmgMul),
     range: def.range * lvlRange * (1 + buff.rangeMul) * frozenRangeMul,
     cd: def.cd * lvlCd * (1 + buff.cdMul) * frozenCdMul,
     splash: def.splash != null ? def.splash * (1 + buff.splashMul) * frozenSplashMul : undefined,
-    slow: def.slow,
-    stun: def.stun,
+    slow: slowOut,
+    stun: stunOut,
     chainBounce: def.chainBounce,
-    knockback: def.knockback,
+    knockback: def.knockback != null ? def.knockback + (buff.knockback || 0) : undefined,
     proj: def.proj,
+    // New mechanic-driven fields. Each is summed: buff value + tower base.
+    critChance: (def.critChance || 0) + (buff.critChance || 0),
+    critMul: def.critMul || 2.0,
+    multiShot: (def.multiShot || 0) + (buff.multiShot || 0),
+    executeBonus: buff.executeBonus || 0,           // applied at hit time when target hp ≤ executeThreshold
+    executeThreshold: 0.30,
+    extraStunChance: buff.stunChance || 0,
+    dotBonus: buff.dotDamage || 0,
+    attackKind: def.attackKind || 'point',
     buff,
     frozen: isFrozen,
   };

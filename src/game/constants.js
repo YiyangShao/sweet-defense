@@ -10,21 +10,114 @@ export const H = ROWS * T;
 
 export const PREP_DURATION = 5;
 
-// `synergy`: bonuses this tower grants to its 8-neighbor placements.
-// dmgMul/rangeMul/splashMul are additive multipliers (e.g. 0.10 = +10%).
-// cdMul is also additive (e.g. -0.15 = -15% cooldown / faster fire).
+// === Tower definitions ===
+//
+// Each tower has:
+//   attackKind  — point / beam / boomerang / wave / chain / melee / splash /
+//                 multiSplash / chainBounce
+//   synergy     — { geometry, ...buff fields } where geometry is one of
+//                 neighbor8 | orthogonal4 | diagonal4 | row | column | circle2
+//
+// Pricing was collapsed to a 60-130 band so towers compete on niche, not raw
+// cost. Each tower has a unique synergy field + geometry combo.
 export const TOWER_DEFS = {
-  cupcake:  { Comp: Cupcake,       cost: 50,  dmg: 8,  range: 2.0, cd: 0.22, name: '杯子蛋糕',     role: '快速射击', desc: '糖珠扫射，对小怪极有效',     proj: '#FFB5C5' },
-  macaron:  { Comp: Macaron,       cost: 80,  dmg: 26, range: 3.8, cd: 1.10, synergy: { rangeMul: 0.10 },                 name: '马卡龙',       role: '远程狙击', desc: '远距精准重击',                proj: '#B79CD1' },
-  donut:    { Comp: Donut,         cost: 100, dmg: 14, range: 1.9, cd: 1.00, splash: 1.2, synergy: { dmgMul: 0.05, splashMul: 0.15 }, name: '甜甜圈', role: '环形伤害', desc: '糖霜爆炸，溅射群伤', proj: '#F58CA6' },
-  icecream: { Comp: IceCream,      cost: 120, dmg: 4,  range: 2.2, cd: 0.60, slow: { factor: 0.5, duration: 1.6 }, synergy: { cdMul: -0.10 }, name: '冰淇淋', role: '冰冻减速', desc: '降低敌人速度', proj: '#A8D9C0' },
-  lollipop: { Comp: Lollipop,      cost: 90,  dmg: 6,  range: 2.0, cd: 0.85, stun: 0.9, synergy: { dmgMul: 0.05 },        name: '棒棒糖',  role: '眩晕控制', desc: '短暂定身敌人',                proj: '#FFE5EC' },
-  cookie:   { Comp: Cookie,        cost: 30,  dmg: 6,  range: 1.7, cd: 0.95, name: '曲奇饼',       role: '基础便宜', desc: '入门首选，性价比高',          proj: '#D9B47C' },
-  choco:    { Comp: ChocoFountain, cost: 200, dmg: 9,  range: 2.0, cd: 0.18, synergy: { cdMul: -0.15 },                   name: '巧克力喷泉',   role: '持续伤害', desc: '高频微伤喷射',                proj: '#5A3E36' },
-  cake:     { Comp: Cake,          cost: 350, dmg: 50, range: 2.6, cd: 1.40, splash: 0.9, synergy: { dmgMul: 0.10 },      name: '蛋糕', role: 'Boss 塔', desc: '重型轰击，AOE 巨伤',         proj: '#F8E060' },
-  lemon:    { Comp: Lemon,         cost: 110, dmg: 5,  range: 2.0, cd: 0.80, splash: 1.4, slow: { factor: 0.55, duration: 2.2 }, synergy: { rangeMul: 0.05 }, name: '柠檬汁',  role: '范围减速', desc: 'AOE 减速，泼洒酸冰',   proj: '#FFEC80' },
-  strawberry:{ Comp: Strawberry,   cost: 130, dmg: 18, range: 2.4, cd: 1.00, chainBounce: 2, synergy: { dmgMul: 0.05 },     name: '草莓',    role: '链式弹射', desc: '弹跳到 3 个目标',    proj: '#F58CA6' },
-  banana:   { Comp: Banana,        cost: 100, dmg: 11, range: 2.0, cd: 0.70, knockback: 56, synergy: { cdMul: -0.05 },      name: '香蕉',    role: '击退',     desc: '命中后敌人后退',      proj: '#F8E060' },
+  cookie: {
+    Comp: Cookie,            cost: 60,   dmg: 7,  range: 1.8, cd: 0.85,
+    name: '曲奇饼',          role: '点射 · 残血加伤',
+    desc: '朴素点射，5% 暴击。给 8 邻塔残血斩杀加伤。',
+    proj: '#D9B47C',         attackKind: 'point',
+    critChance: 0.05,        critMul: 2.0,
+    synergy: { geometry: 'neighbor8', executeBonus: 0.10 },
+  },
+  cupcake: {
+    Comp: Cupcake,           cost: 80,   dmg: 9,  range: 2.0, cd: 0.32,
+    name: '杯子蛋糕',        role: '点射 · 高频',
+    desc: '高速糖珠扫射。给十字 4 邻塔射速 +8.7%。',
+    proj: '#FFB5C5',         attackKind: 'point',
+    synergy: { geometry: 'orthogonal4', cdMul: -0.08 },
+  },
+  macaron: {
+    Comp: Macaron,           cost: 110,  dmg: 22, range: 4.2, cd: 1.20,
+    name: '马卡龙',          role: '直线穿透',
+    desc: '直线投掷穿透，每多一个目标 ×0.7 dmg。给整行塔 range +10%。',
+    proj: '#B79CD1',         attackKind: 'beam',
+    pierce: 4,               pierceFalloff: 0.7,
+    synergy: { geometry: 'row', rangeMul: 0.10 },
+  },
+  donut: {
+    Comp: Donut,             cost: 100,  dmg: 13, range: 2.0, cd: 0.95,
+    name: '甜甜圈',          role: '环形 splash',
+    desc: '糖霜炸开，命中敌人受伤 +20% 持续 2 秒。给斜对角塔 splash +15%。',
+    proj: '#F58CA6',         attackKind: 'splash',
+    splash: 1.2,
+    debuff: { kind: 'frosting', amount: 0.20, duration: 2.0 },
+    synergy: { geometry: 'diagonal4', splashMul: 0.15 },
+  },
+  icecream: {
+    Comp: IceCream,          cost: 120,  dmg: 0,  range: 2.0, cd: 1.50,
+    name: '冰淇淋',          role: '光波圈 · 减速冻结',
+    desc: '周期性向外扩散冷波，圈内敌人减速；停留过久自动冻结。给 2 格圆内塔状态 +20%。',
+    proj: '#A8D9C0',         attackKind: 'wave',
+    waveDamage: 4,
+    waveSlow: { factor: 0.5, duration: 1.6 },
+    freezeAfter: 3.0,        freezeDuration: 1.5,
+    synergy: { geometry: 'circle2', statusDuration: 0.20 },
+  },
+  lollipop: {
+    Comp: Lollipop,          cost: 90,   dmg: 8,  range: 2.2, cd: 1.10,
+    name: '棒棒糖',          role: '回旋镖',
+    desc: '糖棒飞出绕弧线返回，往返打沿路。给整列塔眩晕概率 +10%。',
+    proj: '#FFE5EC',         attackKind: 'boomerang',
+    synergy: { geometry: 'column', stunChance: 0.10 },
+  },
+  choco: {
+    Comp: ChocoFountain,     cost: 110,  dmg: 6,  range: 2.2, cd: 0.55,
+    name: '巧克力喷泉',      role: '连电 · DOT',
+    desc: '同时电连最多 ⭐ 个目标（=等级），每 tick 附加燃烧叠层。给 8 邻塔 DOT +15%。',
+    proj: '#5A3E36',         attackKind: 'chain',
+    dot: { dps: 1.0, duration: 3.0, maxStacks: 5 },
+    synergy: { geometry: 'neighbor8', dotDamage: 0.15 },
+  },
+  cake: {
+    Comp: Cake,              cost: 130,  dmg: 32, range: 2.6, cd: 1.30,
+    name: '蛋糕',            role: '点射 · 击杀爆炸',
+    desc: '高伤单点 + 10% 暴击 ×2.5；击杀触发圆形爆炸。给整行塔 dmg +10%。',
+    proj: '#F8E060',         attackKind: 'point',
+    splash: 0,
+    critChance: 0.10,        critMul: 2.5,
+    onKillSplash: 1.4,
+    synergy: { geometry: 'row', dmgMul: 0.10 },
+  },
+  lemon: {
+    Comp: Lemon,             cost: 100,  dmg: 5,  range: 2.0, cd: 0.95,
+    name: '柠檬汁',          role: '三发酸雨',
+    desc: '同时落 3 发小 splash + 易伤 debuff。给十字 4 邻塔减速更狠 (-0.10)。',
+    proj: '#FFEC80',         attackKind: 'multiSplash',
+    splashCount: 3,          splashSpread: 1.0,
+    splash: 0.8,
+    slow: { factor: 0.65, duration: 1.8 },
+    debuff: { kind: 'acid', amount: 0.15, duration: 2.0 },
+    synergy: { geometry: 'orthogonal4', slowFactor: -0.10 },
+  },
+  strawberry: {
+    Comp: Strawberry,        cost: 110,  dmg: 14, range: 2.4, cd: 1.00,
+    name: '草莓',            role: '弹链 · 双击',
+    desc: '弹链 3 跳，每跳 30% 双击。给斜对角塔多发概率 +8%。',
+    proj: '#F58CA6',         attackKind: 'chainBounce',
+    chainBounce: 3,          doubleTapChance: 0.30,
+    synergy: { geometry: 'diagonal4', multiShot: 0.08 },
+  },
+  banana: {
+    Comp: Banana,            cost: 90,   dmg: 8,  range: 1.0, cd: 0.40,
+    name: '香蕉',            role: '近战 · 蓄力群攻',
+    desc: '短 range 高速点击，5 击触发圆形大群伤 + 击退。给 8 邻塔击退距离 +15。',
+    proj: '#F8E060',         attackKind: 'melee',
+    chargeNeeded: 5,
+    chargeRadius: 1.5,
+    chargeDamage: 36,
+    knockback: 56,
+    synergy: { geometry: 'neighbor8', knockback: 15 },
+  },
 };
 
 export const TOWER_ORDER = ['cupcake','macaron','donut','icecream','lollipop','cookie','choco','cake','lemon','strawberry','banana'];

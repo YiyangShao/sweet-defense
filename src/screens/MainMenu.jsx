@@ -1,7 +1,7 @@
 import { Cupcake, Macaron, Donut, IceCream } from '../art/desserts.jsx';
 import { Mouse, Rabbit, Fox } from '../art/animals.jsx';
 
-export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAchievements, dailyStreak }) {
+export default function MainMenu({ onStart, onBestiary, onTowerCodex, onEndless, onDaily, onAchievements, dailyStreak }) {
   const streakCount = dailyStreak?.count || 0;
   // "Active" streak = last completion was today or yesterday (not stale from weeks ago).
   const today = new Date();
@@ -64,6 +64,9 @@ export default function MainMenu({ onStart, onBestiary, onEndless, onDaily, onAc
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="bubble-btn" style={{ fontSize: 14, padding: '10px 18px' }} onClick={onBestiary}>
               📖 动物图鉴
+            </button>
+            <button className="bubble-btn" style={{ fontSize: 14, padding: '10px 18px' }} onClick={onTowerCodex}>
+              🏰 炮塔图鉴
             </button>
             <button className="bubble-btn" style={{ fontSize: 14, padding: '10px 18px' }} onClick={onAchievements}>
               ✦ 成就

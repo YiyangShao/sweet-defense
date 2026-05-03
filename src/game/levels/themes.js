@@ -10,7 +10,9 @@ export const THEMES = {
     bgPrimary: '#C4E4D4',
     bgSecondary: '#D4ECDD',
     pathStyle: { outer: '#E0BC8C', inner: '#F5DEB3', sprinkles: ['#FFB5C5','#7BC4A0','#F8E060','#B79CD1','#F5B872'] },
-    availableTowers: ['cookie','cupcake','donut','macaron','icecream','lollipop','wall'],
+    // Onboarding pool: every attack archetype except chain/melee, so players see
+    // point/beam/boomerang/splash/AOE-rain early.
+    availableTowers: ['cookie','cupcake','donut','macaron','lollipop','lemon','wall'],
     decorations: [
       { type: 'macaronTree', gx: 1, gy: 7 }, { type: 'macaronTree', gx: 14, gy: 7 },
       { type: 'lollipopFlower', gx: 5, gy: 0 }, { type: 'lollipopFlower', gx: 11, gy: 8 },
@@ -27,7 +29,8 @@ export const THEMES = {
     bgPrimary: '#E8D5B0',
     bgSecondary: '#F0DFB8',
     pathStyle: { outer: '#A98467', inner: '#D9B47C', sprinkles: ['#5A3E36','#FFB5C5','#F8E060','#7BC4A0','#A98467'] },
-    availableTowers: ['cookie','cupcake','macaron','donut','lollipop','banana','wall'],
+    // Dual entries — choco's chain hits both lanes, banana defends choke points.
+    availableTowers: ['cookie','cupcake','donut','lollipop','choco','banana','wall'],
     decorations: [
       { type: 'cookieBush', gx: 1, gy: 5 }, { type: 'cookieBush', gx: 6, gy: 0 },
       { type: 'cookieBush', gx: 12, gy: 7 }, { type: 'cookieBush', gx: 14, gy: 6 },
@@ -44,7 +47,9 @@ export const THEMES = {
     bgPrimary: '#B0DFC8',
     bgSecondary: '#C0E5D2',
     pathStyle: { outer: '#7BB89A', inner: '#A8D9C0', sprinkles: ['#FFB5C5','#F8E060','#B79CD1','#A8D9C0','#7BB89A'] },
-    availableTowers: ['cookie','cupcake','icecream','donut','lollipop','lemon','wall'],
+    // Tidal mini-waves + curvy paths: icecream aura + lemon AOE rain are the
+    // counter; strawberry chain is for splitter swarms.
+    availableTowers: ['cookie','cupcake','lemon','donut','strawberry','icecream','wall'],
     decorations: [
       { type: 'jellyCube', gx: 0, gy: 4 }, { type: 'jellyCube', gx: 14, gy: 1 },
       { type: 'jellyCube', gx: 14, gy: 7 }, { type: 'jellyCube', gx: 6, gy: 8 },
@@ -61,7 +66,9 @@ export const THEMES = {
     bgPrimary: '#D4C5E0',
     bgSecondary: '#DECEE8',
     pathStyle: { outer: '#E0E5F0', inner: 'white', sprinkles: ['#FFB5C5','#D9C5E8','#F8E060','#B79CD1','#A8D9C0'] },
-    availableTowers: ['cookie','cupcake','macaron','choco','lollipop','strawberry','wall'],
+    // Flying enemies: macaron beam pierces straight lines, choco chain
+    // hits multiple flyers at once.
+    availableTowers: ['cookie','cupcake','macaron','choco','strawberry','lemon','wall'],
     decorations: [
       { type: 'marshmallowCloud', gx: 0, gy: 0 }, { type: 'marshmallowCloud', gx: 14, gy: 0 },
       { type: 'marshmallowCloud', gx: 0, gy: 7 }, { type: 'marshmallowCloud', gx: 4, gy: 7 },
@@ -79,7 +86,9 @@ export const THEMES = {
     bgPrimary: '#C8A684',
     bgSecondary: '#D4B896',
     pathStyle: { outer: '#3A2A26', inner: '#5A3E36', stripes: true, sprinkles: ['#F8E060','#FFB5C5','#A98467','#FFEAD0','#5A3E36'] },
-    availableTowers: ['cookie','donut','choco','icecream','cake','banana','wall'],
+    // Conveyor speed boost: banana's melee charges off the belt, icecream
+    // freezes them, cake AOE clears the speed segment.
+    availableTowers: ['cookie','donut','choco','banana','cake','icecream','wall'],
     decorations: [
       { type: 'gearCookie', gx: 1, gy: 7 }, { type: 'gearCookie', gx: 14, gy: 7 },
       { type: 'gearCookie', gx: 6, gy: 0 }, { type: 'chocoPot', gx: 0, gy: 4 },
@@ -96,6 +105,8 @@ export const THEMES = {
     bgPrimary: '#D8E8E8',
     bgSecondary: '#E5F0F0',
     pathStyle: { outer: '#9CB0C9', inner: '#E0F0FF', cracks: true, sprinkles: ['white','#A8D9C0','#FFB5C5','#B79CD1','#D8E8E8'] },
+    // Frozen tiles boost range/splash — macaron + cake love them. Choco chain
+    // anchors group play.
     availableTowers: ['cookie','cupcake','macaron','donut','choco','cake','wall'],
     decorations: [
       { type: 'icePine', gx: 0, gy: 8 }, { type: 'icePine', gx: 4, gy: 8 },

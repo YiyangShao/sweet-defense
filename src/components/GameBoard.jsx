@@ -76,6 +76,23 @@ export default function GameBoard({
         {e.stunUntil > world.elapsed && (
           <text x="0" y={-size / 2 - 18} textAnchor="middle" fontSize="20">⭐</text>
         )}
+        {e.frozenUntil > world.elapsed && (
+          <g>
+            <circle cx="0" cy="0" r={size / 2 + 4} fill="rgba(168,217,232,0.35)" stroke="#7BB6E0" strokeWidth="2" />
+            <text x="0" y={-size / 2 - 8} textAnchor="middle" fontSize="18">❄</text>
+          </g>
+        )}
+        {e.dotStacks && e.dotStacks.length > 0 && (
+          <g transform={`translate(${size / 2 - 4} ${-size / 2 + 4})`}>
+            <circle r="9" fill="#FF7A4D" stroke="white" strokeWidth="1.5" />
+            <text x="0" y="3" textAnchor="middle" fontSize="11" fontWeight="800" fill="white">🔥</text>
+          </g>
+        )}
+        {e.debuffs && (e.debuffs.frosting > world.elapsed || e.debuffs.acid > world.elapsed) && (
+          <g transform={`translate(${-size / 2 + 6} ${-size / 2 + 4})`}>
+            <circle r="7" fill={e.debuffs.frosting > world.elapsed ? '#F58CA6' : '#F8E060'} stroke="white" strokeWidth="1.5" />
+          </g>
+        )}
       </g>
     );
   });
@@ -173,6 +190,21 @@ export default function GameBoard({
   // All visual-only layers below are pointer-events: none so they never
   // intercept clicks intended for towers/enemies/obstacles underneath.
   const projectileEls = world.projectiles.map(p => {
+    // Boomerang has its own per-tick (x, y) computed in the engine.
+    if (p.boomerang) {
+      const x = p.x ?? p.fromX, y = p.y ?? p.fromY;
+      return (
+        <g key={p.id} style={{ pointerEvents: 'none' }}>
+          <circle cx={x} cy={y} r={p.size + 4} fill={p.color} opacity="0.25" />
+          <circle cx={x} cy={y} r={p.size} fill={p.color} />
+          <g transform={`translate(${x} ${y})`}>
+            <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.4s" repeatCount="indefinite" additive="sum" />
+            <line x1={-p.size - 2} y1="0" x2={p.size + 2} y2="0" stroke="white" strokeWidth="2" opacity="0.7" />
+            <line x1="0" y1={-p.size - 2} x2="0" y2={p.size + 2} stroke="white" strokeWidth="2" opacity="0.7" />
+          </g>
+        </g>
+      );
+    }
     const x = p.fromX + (p.toX - p.fromX) * p.t;
     const y = p.fromY + (p.toY - p.fromY) * p.t;
     return (
@@ -181,6 +213,56 @@ export default function GameBoard({
         <circle cx={x} cy={y} r={p.size + 3} fill={p.color} opacity="0.35" />
         <circle cx={x} cy={y} r={p.size} fill={p.color} />
         <circle cx={x - 1.5} cy={y - 1.5} r={p.size - 2.5} fill="white" opacity="0.55" />
+      </g>
+    );
+  });
+
+  // Beam visuals (macaron pierce, choco chain lightning)
+  const beamEls = (world.beams || []).map(b => {
+    const fade = 1 - (b.t / b.dur);
+    if (b.jagged) {
+      // Lightning bolt: zig-zag between (fromX,fromY) and (toX,toY)
+      const dx = b.toX - b.fromX, dy = b.toY - b.fromY;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const segs = 5;
+      const pts = [`${b.fromX},${b.fromY}`];
+      for (let i = 1; i < segs; i++) {
+        const fx = b.fromX + dx * (i / segs);
+        const fy = b.fromY + dy * (i / segs);
+        const j = (Math.sin(b.id + i * 1.7) * 0.5 + 0.5 - 0.5) * 12;
+        pts.push(`${fx + (-uy) * j},${fy + ux * j}`);
+      }
+      pts.push(`${b.toX},${b.toY}`);
+      return (
+        <g key={`beam${b.id}`} style={{ pointerEvents: 'none', opacity: fade }}>
+          <polyline points={pts.join(' ')} fill="none" stroke={b.color} strokeWidth="4" opacity="0.4" />
+          <polyline points={pts.join(' ')} fill="none" stroke="white" strokeWidth="1.5" opacity="0.95" />
+        </g>
+      );
+    }
+    return (
+      <g key={`beam${b.id}`} style={{ pointerEvents: 'none', opacity: fade }}>
+        <line x1={b.fromX} y1={b.fromY} x2={b.toX} y2={b.toY}
+              stroke={b.color} strokeWidth="10" strokeLinecap="round" opacity="0.30" />
+        <line x1={b.fromX} y1={b.fromY} x2={b.toX} y2={b.toY}
+              stroke={b.color} strokeWidth="5" strokeLinecap="round" opacity="0.65" />
+        <line x1={b.fromX} y1={b.fromY} x2={b.toX} y2={b.toY}
+              stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.95" />
+      </g>
+    );
+  });
+
+  // Shockwave / aura ring visuals (icecream wave + banana charge release)
+  const shockwaveEls = (world.shockwaves || []).map(sw => {
+    const pt = sw.t / sw.dur;
+    const r = sw.maxR * pt;
+    return (
+      <g key={`sw${sw.id}`} style={{ pointerEvents: 'none' }}>
+        <circle cx={sw.x} cy={sw.y} r={r} fill="none"
+                stroke={sw.color} strokeWidth="6" opacity={(1 - pt) * 0.45} />
+        <circle cx={sw.x} cy={sw.y} r={r} fill="none"
+                stroke="white" strokeWidth="2" opacity={(1 - pt) * 0.7} />
       </g>
     );
   });
@@ -544,6 +626,8 @@ export default function GameBoard({
       {ghostEl}
       {enemyEls}
       {projectileEls}
+      {beamEls}
+      {shockwaveEls}
       {flashEls}
       {burstEls}
       {focusEl}

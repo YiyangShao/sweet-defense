@@ -1,4 +1,4 @@
-import { T, ENEMY_DEFS, PREP_DURATION, ENGAGE_DIST } from './constants.js';
+import { T, ENEMY_DEFS, PREP_DURATION, ENGAGE_DIST, TOWER_DEFS } from './constants.js';
 import { towerStats, COMBO_TIMEOUT } from './world.js';
 import { play, shootSoundFor } from './sfx.js';
 import { appendEndlessWave } from './modes.js';
@@ -7,34 +7,29 @@ function emit(w, type, payload = {}) {
   w.events.push({ type, ...payload });
 }
 
-// Per-run difficulty multiplier applied to enemy HP / shield / wallDps / reward.
-// Scales by theme + sub-level + wave so 60-level progression feels graded.
-// Tuned for "casual-friendly" mode: T1-1 W1 = 1.0, T6-10 W7 ≈ 2.85 (was 3.77).
+// === Difficulty curve =====================================================
+// Per-run multiplier applied to enemy HP / shield / wallDps / reward.
+// T1-1 W1 = 1.00, T6-10 W7 ≈ 2.85.
 export function difficultyScale(level, waveIdx) {
   const idx = Math.max(0, waveIdx);
-  if (level.endless) {
-    return 1.10 * (1 + Math.sqrt(idx) * 0.35);
-  }
-  if (level.daily) {
-    return 1.20 * (1 + idx * 0.06);
-  }
+  if (level.endless) return 1.10 * (1 + Math.sqrt(idx) * 0.35);
+  if (level.daily) return 1.20 * (1 + idx * 0.06);
   const THEME_MUL = { 1: 1.00, 2: 1.12, 3: 1.25, 4: 1.40, 5: 1.55, 6: 1.75 };
   const themeId = level.themeId || (typeof level.id === 'number' ? level.id : null);
   const base = (themeId && THEME_MUL[themeId]) || 1;
-  // Sub-level inside a theme adds a gentle bump so L*-10 isn't trivial.
   const sub = 1 + ((level.subLevel || 1) - 1) * 0.03;
   return base * sub * (1 + idx * 0.05);
 }
 
-// Path helper exports — used elsewhere too. Defaults to path 0 for safety.
+// === Path helpers =========================================================
 export function pathOf(w, e) { return w.paths[e.pathIdx || 0]; }
 export function posOf(w, e) { return pathOf(w, e).posAt(e.dist); }
 
+// === Enemy spawn ==========================================================
 function spawnEnemy(w, type, dist, pathIdx = 0) {
   const def = ENEMY_DEFS[type];
   if (!def) return;
   const scale = difficultyScale(w.level, w.waveIdx);
-  // Reward grows sub-linearly so economy stays a meaningful constraint.
   const rewardScale = 1 + (scale - 1) * 0.5;
   const hp = Math.max(1, Math.round(def.hp * scale));
   const shield = def.shield ? Math.max(1, Math.round(def.shield * scale)) : 0;
@@ -50,20 +45,25 @@ function spawnEnemy(w, type, dist, pathIdx = 0) {
     wallDps: def.wallDps * scale,
     slowUntil: 0, slowFactor: 1,
     stunUntil: 0,
+    frozenUntil: 0,
+    iceTime: 0,                    // aggregate seconds spent inside icecream range
     flash: 0,
     dead: false,
     shield,
     maxShield: shield,
     shieldBroken: false,
     lastHealAt: 0,
+    debuffs: {},                   // { frosting: untilT, acid: untilT } + amount cache
+    dotStacks: [],                 // [{ until, dps }]
+    dotTickAccum: 0,               // seconds accumulator since last DOT tick
   });
 }
 
+// === Wave start ===========================================================
 function startWave(w, idx) {
   const wave = w.level.waves[idx];
   const queue = [];
   const numPaths = w.paths.length;
-  // Multi-path levels alternate group → path so each path sees varied threats.
   let groupIdx = 0;
   for (const group of wave) {
     const pathIdx = numPaths > 1 ? (groupIdx % numPaths) : 0;
@@ -80,10 +80,10 @@ function startWave(w, idx) {
   play('wave');
 }
 
+// === Visual helpers ========================================================
 function spawnFlash(w, x, y, color) {
   w.flashes.push({ id: w.nextId++, x, y, color, t: 0, dur: 0.14 });
 }
-
 function spawnBurst(w, x, y, color, count = 6, big = false) {
   const particles = [];
   for (let i = 0; i < count; i++) {
@@ -95,7 +95,10 @@ function spawnBurst(w, x, y, color, count = 6, big = false) {
   w.bursts.push({ id: w.nextId++, x, y, t: 0, dur: 0.40, particles });
 }
 
-function applyDamage(w, enemy, dmg, opts) {
+// === Damage application ===================================================
+// `opts` may carry: dmg, slow, stun, knockback, debuff, dot, critChance, critMul,
+// executeBonus, executeThreshold, extraStunChance, dotBonus.
+function applyDamage(w, enemy, baseDmg, opts) {
   const def = ENEMY_DEFS[enemy.type];
   const ep = posOf(w, enemy);
   if (def.dodge && Math.random() < def.dodge) {
@@ -103,7 +106,30 @@ function applyDamage(w, enemy, dmg, opts) {
     emit(w, 'enemy_dodged', { enemy_type: enemy.type });
     return false;
   }
-  // Shield absorbs damage first.
+
+  let dmg = baseDmg;
+  let isCrit = false;
+  // Critical hit
+  if (opts && opts.critChance && Math.random() < opts.critChance) {
+    dmg *= (opts.critMul || 2.0);
+    isCrit = true;
+  }
+  // Execute bonus when target is at or below threshold
+  if (opts && opts.executeBonus) {
+    const hpFrac = enemy.hp / enemy.maxHp;
+    if (hpFrac <= (opts.executeThreshold || 0.30)) dmg *= 1 + opts.executeBonus;
+  }
+  // Debuff damage amplification (frosting / acid)
+  let debuffMul = 1;
+  if (enemy.debuffs?.frosting && enemy.debuffs.frosting > w.elapsed) {
+    debuffMul += enemy._frostingAmount || 0;
+  }
+  if (enemy.debuffs?.acid && enemy.debuffs.acid > w.elapsed) {
+    debuffMul += enemy._acidAmount || 0;
+  }
+  dmg *= debuffMul;
+
+  // Shield first
   if (enemy.shield > 0) {
     const absorbed = Math.min(enemy.shield, dmg);
     enemy.shield -= absorbed;
@@ -117,9 +143,16 @@ function applyDamage(w, enemy, dmg, opts) {
     }
     if (dmg <= 0) return true;
   }
+
   enemy.hp -= dmg;
   enemy.flash = 0.13;
-  w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: `-${Math.round(dmg)}`, color: '#E85A7A', t: 0 });
+  if (isCrit) {
+    w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 28, text: `暴击 ${Math.round(dmg)}`, color: '#F8E060', t: 0 });
+  } else {
+    w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: `-${Math.round(dmg)}`, color: '#E85A7A', t: 0 });
+  }
+
+  // Status effects
   if (opts && opts.slow && !def.boss) {
     enemy.slowUntil = w.elapsed + opts.slow.duration;
     enemy.slowFactor = opts.slow.factor;
@@ -127,17 +160,297 @@ function applyDamage(w, enemy, dmg, opts) {
   if (opts && opts.stun && !def.boss) {
     enemy.stunUntil = w.elapsed + opts.stun;
   }
-  // Knockback (banana). Boss-immune.
+  if (opts && opts.extraStunChance && !def.boss && Math.random() < opts.extraStunChance) {
+    enemy.stunUntil = Math.max(enemy.stunUntil, w.elapsed + 0.5);
+  }
   if (opts && opts.knockback && !def.boss) {
     enemy.dist = Math.max(0, enemy.dist - opts.knockback);
+  }
+  // Frosting / acid debuff (defensive cap on duration)
+  if (opts && opts.debuff && !def.boss) {
+    enemy.debuffs = enemy.debuffs || {};
+    enemy.debuffs[opts.debuff.kind] = w.elapsed + opts.debuff.duration;
+    enemy[`_${opts.debuff.kind}Amount`] = opts.debuff.amount;
+  }
+  // Damage-over-time stacks
+  if (opts && opts.dot && !def.boss) {
+    enemy.dotStacks = enemy.dotStacks || [];
+    const dps = opts.dot.dps * (1 + (opts.dotBonus || 0));
+    enemy.dotStacks.push({ until: w.elapsed + opts.dot.duration, dps });
+    while (enemy.dotStacks.length > (opts.dot.maxStacks || 5)) enemy.dotStacks.shift();
   }
   return true;
 }
 
+// === Tower attack helpers (one per attackKind) ============================
+function pickFrontTarget(w, tw, rangePx, focusTarget, focusKind, focusPos) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  if (focusTarget && focusPos) {
+    const d = Math.hypot(focusPos.x - tx, focusPos.y - ty);
+    if (d <= rangePx) return { chosen: focusTarget, kind: focusKind, pos: focusPos };
+  }
+  let best = null, bestProgress = -1;
+  for (const e of w.enemies) {
+    if (e.dead || e.hp <= 0) continue;
+    const ep = posOf(w, e);
+    const d = Math.hypot(ep.x - tx, ep.y - ty);
+    if (d <= rangePx && e.dist > bestProgress) { best = e; bestProgress = e.dist; }
+  }
+  if (best) return { chosen: best, kind: 'enemy', pos: posOf(w, best) };
+  return null;
+}
+
+// Build the opts payload that applyDamage understands from a tower's stats.
+function damageOpts(tw, stats) {
+  const def = TOWER_DEFS[tw.type];
+  return {
+    slow: stats.slow,
+    stun: stats.stun,
+    knockback: stats.knockback,
+    debuff: def.debuff,
+    dot: def.dot,
+    critChance: stats.critChance,
+    critMul: stats.critMul,
+    executeBonus: stats.executeBonus,
+    executeThreshold: stats.executeThreshold,
+    extraStunChance: stats.extraStunChance,
+    dotBonus: stats.dotBonus,
+  };
+}
+
+function firePoint(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  w.projectiles.push({
+    id: w.nextId++,
+    fromX: tx, fromY: ty, toX: target.pos.x, toY: target.pos.y,
+    targetId: target.chosen.id, targetKind: target.kind,
+    t: 0, duration: tw.type === 'cake' ? 0.20 : 0.16,
+    color: stats.proj, size: tw.type === 'cake' ? 9 : 6,
+    dmg: stats.dmg, splash: stats.splash || undefined,
+    onKillSplash: TOWER_DEFS[tw.type].onKillSplash,
+    opts: damageOpts(tw, stats),
+    towerType: tw.type,
+  });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+function fireSplash(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  w.projectiles.push({
+    id: w.nextId++,
+    fromX: tx, fromY: ty, toX: target.pos.x, toY: target.pos.y,
+    targetId: target.chosen.id, targetKind: target.kind,
+    t: 0, duration: 0.18, color: stats.proj, size: 8,
+    dmg: stats.dmg, splash: stats.splash,
+    opts: damageOpts(tw, stats),
+    towerType: tw.type,
+  });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+function fireMultiSplash(w, tw, stats, target) {
+  const def = TOWER_DEFS[tw.type];
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  const count = def.splashCount || 3;
+  const spreadPx = (def.splashSpread || 1.0) * T;
+  const angle0 = Math.atan2(target.pos.y - ty, target.pos.x - tx);
+  for (let i = 0; i < count; i++) {
+    const offsetAngle = angle0 + (i - (count - 1) / 2) * 0.45;
+    const r = Math.hypot(target.pos.x - tx, target.pos.y - ty);
+    const ax = tx + Math.cos(offsetAngle) * r + (Math.random() - 0.5) * spreadPx;
+    const ay = ty + Math.sin(offsetAngle) * r + (Math.random() - 0.5) * spreadPx;
+    w.projectiles.push({
+      id: w.nextId++,
+      fromX: tx, fromY: ty, toX: ax, toY: ay,
+      targetId: -1, targetKind: 'aoe',          // aoe = no primary, splash on land
+      t: 0, duration: 0.18, color: stats.proj, size: 5,
+      dmg: stats.dmg, splash: stats.splash,
+      opts: damageOpts(tw, stats),
+      towerType: tw.type,
+    });
+  }
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+function fireChainBounce(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  w.projectiles.push({
+    id: w.nextId++,
+    fromX: tx, fromY: ty, toX: target.pos.x, toY: target.pos.y,
+    targetId: target.chosen.id, targetKind: target.kind,
+    t: 0, duration: 0.16, color: stats.proj, size: 6,
+    dmg: stats.dmg,
+    chainBounce: stats.chainBounce,
+    doubleTapChance: TOWER_DEFS[tw.type].doubleTapChance,
+    opts: damageOpts(tw, stats),
+    towerType: tw.type,
+  });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+// Beam: instant, pierces enemies along a line from tower toward primary target.
+function fireBeam(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  const def = TOWER_DEFS[tw.type];
+  const dx = target.pos.x - tx, dy = target.pos.y - ty;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return;
+  const ux = dx / len, uy = dy / len;
+  const rangePx = stats.range * T;
+  // Find enemies within thickness perpendicular to ray, projected length ≤ range
+  const thickness = T * 0.42;
+  const hits = [];
+  for (const e of w.enemies) {
+    if (e.dead || e.hp <= 0) continue;
+    const ep = posOf(w, e);
+    const rx = ep.x - tx, ry = ep.y - ty;
+    const along = rx * ux + ry * uy;          // signed projection
+    if (along < 0 || along > rangePx) continue;
+    const perp = Math.abs(rx * (-uy) + ry * ux);
+    if (perp > thickness) continue;
+    hits.push({ e, along, ep });
+  }
+  hits.sort((a, b) => a.along - b.along);
+  // Apply with falloff; beam stops at `pierce` enemies
+  let dmg = stats.dmg;
+  const opts = damageOpts(tw, stats);
+  const pierce = def.pierce || 4;
+  const falloff = def.pierceFalloff || 0.7;
+  let endX = tx + ux * rangePx, endY = ty + uy * rangePx;
+  for (let i = 0; i < hits.length && i < pierce; i++) {
+    applyDamage(w, hits[i].e, dmg, opts);
+    spawnBurst(w, hits[i].ep.x, hits[i].ep.y, stats.proj, 4, false);
+    if (i === Math.min(hits.length, pierce) - 1) { endX = hits[i].ep.x; endY = hits[i].ep.y; }
+    dmg *= falloff;
+  }
+  // Persistent beam visual (~0.18s)
+  w.beams = w.beams || [];
+  w.beams.push({ id: w.nextId++, fromX: tx, fromY: ty, toX: endX, toY: endY,
+    color: stats.proj, t: 0, dur: 0.18 });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+// Chain lightning: instant, hits up to (level) enemies in range, applies DOT.
+function fireChain(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  const rangePx = stats.range * T;
+  const maxTargets = tw.level;          // level controls chain length
+  // Start from chosen (front-most) target, then chain to nearest others.
+  const visited = new Set();
+  const chain = [];
+  let prevX = tx, prevY = ty;
+  let prev = target;
+  while (chain.length < maxTargets && prev) {
+    visited.add(prev.chosen.id);
+    chain.push(prev);
+    // Next nearest enemy in tower range
+    let next = null, bestD = Infinity;
+    for (const e of w.enemies) {
+      if (e.dead || e.hp <= 0 || visited.has(e.id)) continue;
+      const ep = posOf(w, e);
+      const d = Math.hypot(ep.x - tx, ep.y - ty);
+      if (d > rangePx) continue;
+      const dPrev = Math.hypot(ep.x - prev.pos.x, ep.y - prev.pos.y);
+      if (dPrev < bestD) { bestD = dPrev; next = { chosen: e, kind: 'enemy', pos: ep }; }
+    }
+    prev = next;
+  }
+  // Apply damage + DOT to each, draw lightning links visually.
+  const opts = damageOpts(tw, stats);
+  w.beams = w.beams || [];
+  for (let i = 0; i < chain.length; i++) {
+    const c = chain[i];
+    if (c.kind === 'enemy') applyDamage(w, c.chosen, stats.dmg, opts);
+    spawnBurst(w, c.pos.x, c.pos.y, stats.proj, 4, false);
+    w.beams.push({
+      id: w.nextId++,
+      fromX: prevX, fromY: prevY, toX: c.pos.x, toY: c.pos.y,
+      color: stats.proj, t: 0, dur: 0.16, jagged: true,
+    });
+    prevX = c.pos.x; prevY = c.pos.y;
+  }
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+// Boomerang: spawns a curving projectile that flies out, arcs around, and
+// comes back. Updated each tick in the projectile loop (special update logic).
+function fireBoomerang(w, tw, stats, target) {
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  const dx = target.pos.x - tx, dy = target.pos.y - ty;
+  const ang = Math.atan2(dy, dx);
+  const reach = Math.min(Math.hypot(dx, dy), stats.range * T);
+  w.projectiles.push({
+    id: w.nextId++,
+    boomerang: true,
+    fromX: tx, fromY: ty,
+    angle: ang,
+    reach,
+    arcWidth: T * 0.7,
+    t: 0, duration: 1.2,                // total flight time
+    color: stats.proj, size: 9,
+    dmg: stats.dmg,
+    opts: damageOpts(tw, stats),
+    towerType: tw.type,
+    hitIds: new Set(),                  // each enemy hit at most twice (out + back)
+  });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+// Wave: periodic expanding shockwave from tower; damages + slows enemies in
+// range. Long stays inside icecream's range trigger freeze (handled in tick).
+function fireWave(w, tw, stats) {
+  const def = TOWER_DEFS[tw.type];
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  w.shockwaves = w.shockwaves || [];
+  w.shockwaves.push({
+    id: w.nextId++,
+    x: tx, y: ty,
+    maxR: stats.range * T,
+    t: 0, dur: 0.50,
+    color: stats.proj,
+    dmg: def.waveDamage || 4,
+    slow: stats.slow || def.waveSlow,
+    hitIds: new Set(),
+    opts: damageOpts(tw, stats),
+  });
+  spawnFlash(w, tx, ty, stats.proj);
+}
+
+// Melee: each cd, hit closest enemy in 1-tile radius and bank a charge.
+// At chargeNeeded charges, release a circular AOE.
+function fireMelee(w, tw, stats, target) {
+  const def = TOWER_DEFS[tw.type];
+  const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+  const opts = damageOpts(tw, stats);
+  // Apply damage to chosen target
+  if (target.kind === 'enemy') applyDamage(w, target.chosen, stats.dmg, opts);
+  spawnBurst(w, target.pos.x, target.pos.y, stats.proj, 5, false);
+  tw.charge = (tw.charge || 0) + 1;
+  // When charged, release AOE around the tower
+  if (tw.charge >= (def.chargeNeeded || 5)) {
+    tw.charge = 0;
+    const radius = (def.chargeRadius || 1.5) * T;
+    for (const e of w.enemies) {
+      if (e.dead || e.hp <= 0) continue;
+      const ep = posOf(w, e);
+      const d = Math.hypot(ep.x - tx, ep.y - ty);
+      if (d <= radius) {
+        applyDamage(w, e, def.chargeDamage || 32, { ...opts, knockback: stats.knockback });
+      }
+    }
+    spawnBurst(w, tx, ty, '#FFE066', 14, true);
+    w.shockwaves = w.shockwaves || [];
+    w.shockwaves.push({
+      id: w.nextId++, x: tx, y: ty, maxR: radius,
+      t: 0, dur: 0.35, color: '#FFE066',
+      dmg: 0, hitIds: new Set(), opts,                   // visual-only ring
+    });
+    play('splash');
+  }
+}
+
+// === Main update tick =====================================================
 export function update(w, rawDt) {
-  // w.events accumulates across ticks; the consumer (e.g. achievements in
-  // Phase F) is responsible for draining it. Cap defensively to avoid
-  // unbounded growth if no consumer is wired up yet.
   if (w.events.length > 256) w.events.splice(0, w.events.length - 256);
   if (w.finished) return;
   if (w.speed === 0) return;
@@ -145,9 +458,7 @@ export function update(w, rawDt) {
   w.elapsed += dt;
   w.waveTimer += dt;
 
-  if (w.waveState === 'preparing' && w.waveTimer >= 0) {
-    startWave(w, w.waveIdx);
-  }
+  if (w.waveState === 'preparing' && w.waveTimer >= 0) startWave(w, w.waveIdx);
 
   if (w.waveState === 'spawning') {
     while (w.spawnQueue.length && w.spawnQueue[0].t <= w.waveTimer) {
@@ -157,8 +468,7 @@ export function update(w, rawDt) {
     if (!w.spawnQueue.length) w.waveState = 'active';
   }
 
-  // T3 mechanic: tidal — periodic mini-wave spawns extra enemies during a wave.
-  // level.tidal = { period, type, count } — uses w.tidalNextAt cursor on world.
+  // T3 tidal mini-waves
   const tidal = w.level.tidal;
   if (tidal && w.waveState !== 'preparing' && !w.finished) {
     if (w.tidalNextAt == null) w.tidalNextAt = w.elapsed + tidal.period;
@@ -166,19 +476,15 @@ export function update(w, rawDt) {
       w.tidalNextAt = w.elapsed + tidal.period;
       const numPaths = w.paths.length;
       for (let i = 0; i < tidal.count; i++) {
-        // Stagger 0.4s apart, alternate paths
-        setTimeout(() => {}, 0); // no-op to keep linter happy
         spawnEnemy(w, tidal.type, -i * 25, i % numPaths);
       }
-      // Visual cue: a brief float text near the entry
       const entry = w.paths[0].points[0];
       w.floats.push({ id: w.nextId++, x: entry.x + 30, y: entry.y - 30, text: '潮汐!', color: '#7BB6E0', t: 0 });
       emit(w, 'tidal_pulse', { type: tidal.type, count: tidal.count });
     }
   }
 
-  // Wall collision per-path: each enemy on its own path consults its own wall set.
-  // Pre-compute walls grouped by pathIdx (sorted by their per-path dist).
+  // === Wall collision per-path ============================================
   const wallsByPath = w.walls.length ? w.paths.map((_, pi) =>
     w.walls
       .map(wl => {
@@ -189,13 +495,14 @@ export function update(w, rawDt) {
       .sort((a, b) => a.dist - b.dist)
   ) : null;
 
+  // === Enemy update =======================================================
   for (const e of w.enemies) {
     if (e.dead || e.hp <= 0) continue;
     if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
     const def = ENEMY_DEFS[e.type];
     const ePath = pathOf(w, e);
 
-    // Healer: periodic AOE heal of nearby allies (still ticks while stunned)
+    // Healer pulse
     if (def.heal && (e.lastHealAt || 0) + def.heal.rate <= w.elapsed) {
       const ep0 = posOf(w, e);
       const radPx = def.heal.radius * T;
@@ -215,11 +522,25 @@ export function update(w, rawDt) {
       e.lastHealAt = w.elapsed;
     }
 
-    const stunned = w.elapsed < e.stunUntil;
+    // DOT: apply pending stack damage in 0.5s ticks
+    if (e.dotStacks && e.dotStacks.length) {
+      e.dotStacks = e.dotStacks.filter(s => s.until > w.elapsed);
+      e.dotTickAccum = (e.dotTickAccum || 0) + dt;
+      while (e.dotTickAccum >= 0.5 && e.dotStacks.length) {
+        e.dotTickAccum -= 0.5;
+        const totalDps = e.dotStacks.reduce((a, s) => a + s.dps, 0);
+        const tickDmg = totalDps * 0.5;
+        e.hp -= tickDmg;
+        const ep = posOf(w, e);
+        w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 18, text: `🔥${Math.round(tickDmg)}`, color: '#FF7A4D', t: 0 });
+      }
+    }
+
+    // Frozen / stunned blocks movement (frozen is just stronger stun)
+    const stunned = w.elapsed < e.stunUntil || w.elapsed < e.frozenUntil;
     if (stunned) continue;
 
     const slow = w.elapsed < e.slowUntil ? e.slowFactor : 1;
-    // Conveyor mechanic: if level has a conveyor segment, boost speed there.
     const conveyor = w.level.conveyor;
     let speedMul = 1;
     if (conveyor && ePath.total > 0) {
@@ -228,6 +549,7 @@ export function update(w, rawDt) {
     }
     let newDist = e.dist + def.speed * T * slow * speedMul * dt;
 
+    // Walls
     if (wallsByPath) {
       const lane = wallsByPath[e.pathIdx || 0];
       const nextItem = lane && lane.find(item => !item.wall.dead && item.dist > e.dist - 4);
@@ -256,7 +578,6 @@ export function update(w, rawDt) {
       if (def.steal) w.sugar = Math.max(0, w.sugar - def.steal);
       e.dead = true;
       e.reachedCastle = true;
-      // Castle leak resets combo (penalty for letting enemies through).
       w.combo = 0;
       emit(w, 'enemy_reached_castle', { enemy_type: e.type });
       if (w.hp <= 0) {
@@ -273,10 +594,35 @@ export function update(w, rawDt) {
   }
   w.walls = w.walls.filter(wl => !wl.dead);
 
-  // Resolve focus target (auto-clear if it no longer exists).
-  let focusTarget = null;
-  let focusKind = null;
-  let focusPos = null;
+  // === Icecream aura: track per-enemy time inside any wave-tower's range, freeze if exceeded
+  const iceTowers = w.towers.filter(t => TOWER_DEFS[t.type].attackKind === 'wave');
+  if (iceTowers.length) {
+    for (const e of w.enemies) {
+      if (e.dead || e.hp <= 0) continue;
+      const ep = posOf(w, e);
+      let inside = false;
+      for (const tw of iceTowers) {
+        const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
+        const stats = towerStats(tw, w);
+        if (Math.hypot(ep.x - tx, ep.y - ty) <= stats.range * T) { inside = true; break; }
+      }
+      if (inside) {
+        e.iceTime = (e.iceTime || 0) + dt;
+        const def = ENEMY_DEFS[e.type];
+        if (!def.boss && e.iceTime >= 3.0) {
+          e.frozenUntil = Math.max(e.frozenUntil || 0, w.elapsed + 1.5);
+          e.iceTime = 0;
+          w.floats.push({ id: w.nextId++, x: ep.x, y: ep.y - 24, text: '冻结', color: '#7BB6E0', t: 0 });
+          spawnBurst(w, ep.x, ep.y, '#A8D9C0', 8, false);
+        }
+      } else {
+        e.iceTime = Math.max(0, (e.iceTime || 0) - dt * 0.5);    // decay when out
+      }
+    }
+  }
+
+  // Resolve focus target
+  let focusTarget = null, focusKind = null, focusPos = null;
   if (w.focus) {
     if (w.focus.kind === 'enemy') {
       const ent = w.enemies.find(e => e.id === w.focus.id && !e.dead && e.hp > 0);
@@ -288,81 +634,92 @@ export function update(w, rawDt) {
     if (!focusTarget) w.focus = null;
   }
 
+  // === Tower fire dispatch ================================================
   for (const tw of w.towers) {
     const stats = towerStats(tw, w);
     tw.cooldown = Math.max(0, (tw.cooldown || 0) - dt);
     if (tw.shootPulse > 0) tw.shootPulse = Math.max(0, tw.shootPulse - dt);
     if (tw.cooldown > 0) continue;
 
-    const tx = tw.gx * T + T / 2, ty = tw.gy * T + T / 2;
     const rangePx = stats.range * T;
 
-    // Pick target: focus first if in range, else leading enemy.
-    let chosen = null, chosenKind = null, chosenPos = null;
-    if (focusTarget && focusPos) {
-      const d = Math.hypot(focusPos.x - tx, focusPos.y - ty);
-      if (d <= rangePx) {
-        chosen = focusTarget;
-        chosenKind = focusKind;
-        chosenPos = focusPos;
-      }
-    }
-    if (!chosen) {
-      let best = null, bestProgress = -1;
-      for (const e of w.enemies) {
-        if (e.dead || e.hp <= 0) continue;
-        const ep = posOf(w, e);
-        const d = Math.hypot(ep.x - tx, ep.y - ty);
-        if (d <= rangePx && e.dist > bestProgress) {
-          best = e; bestProgress = e.dist;
-        }
-      }
-      if (best) { chosen = best; chosenKind = 'enemy'; chosenPos = posOf(w, best); }
-    }
-
-    if (chosen) {
-      w.projectiles.push({
-        id: w.nextId++,
-        fromX: tx, fromY: ty,
-        toX: chosenPos.x, toY: chosenPos.y,
-        targetId: chosen.id,
-        targetKind: chosenKind,
-        t: 0,
-        duration: tw.type === 'macaron' ? 0.14 : tw.type === 'cake' ? 0.20 : 0.16,
-        color: stats.proj,
-        size: tw.type === 'cake' ? 9 : tw.type === 'donut' ? 8 : 6,
-        dmg: stats.dmg,
-        splash: stats.splash,
-        slow: stats.slow,
-        stun: stats.stun,
-        chainBounce: stats.chainBounce,
-        knockback: stats.knockback,
-        towerType: tw.type,
-      });
+    // Wave attack (icecream): fires regardless of target
+    if (stats.attackKind === 'wave') {
+      fireWave(w, tw, stats);
       tw.cooldown = stats.cd;
       tw.shootPulse = 0.20;
-      spawnFlash(w, tx, ty, stats.proj);
-      if (Math.random() < (tw.type === 'choco' ? 0.35 : tw.type === 'cupcake' ? 0.7 : 1)) {
-        play(shootSoundFor(tw.type));
-      }
+      continue;
+    }
+
+    // All other kinds need a target
+    const target = pickFrontTarget(w, tw, rangePx, focusTarget, focusKind, focusPos);
+    if (!target) continue;
+
+    switch (stats.attackKind) {
+      case 'beam':         fireBeam(w, tw, stats, target); break;
+      case 'boomerang':    fireBoomerang(w, tw, stats, target); break;
+      case 'chain':        fireChain(w, tw, stats, target); break;
+      case 'melee':        fireMelee(w, tw, stats, target); break;
+      case 'splash':       fireSplash(w, tw, stats, target); break;
+      case 'multiSplash':  fireMultiSplash(w, tw, stats, target); break;
+      case 'chainBounce':  fireChainBounce(w, tw, stats, target); break;
+      default:             firePoint(w, tw, stats, target);
+    }
+
+    tw.cooldown = stats.cd;
+    tw.shootPulse = 0.20;
+    if (Math.random() < (tw.type === 'choco' ? 0.35 : tw.type === 'cupcake' ? 0.7 : 1)) {
+      play(shootSoundFor(tw.type));
     }
   }
 
+  // === Projectile resolution ==============================================
   for (const p of w.projectiles) {
     p.t += dt / p.duration;
+
+    // Boomerang: per-tick hit detection along its arc.
+    if (p.boomerang) {
+      // Position: out for [0, 0.5], back for [0.5, 1]
+      const tt = p.t;
+      const phase = tt < 0.5 ? tt * 2 : (1 - tt) * 2;     // 0..1..0
+      const dist = phase * p.reach;
+      // sideways arc using sin curve
+      const lateral = Math.sin(phase * Math.PI) * p.arcWidth;
+      const fx = p.fromX + Math.cos(p.angle) * dist + Math.cos(p.angle + Math.PI / 2) * lateral;
+      const fy = p.fromY + Math.sin(p.angle) * dist + Math.sin(p.angle + Math.PI / 2) * lateral;
+      p.x = fx; p.y = fy;
+      // Check overlap
+      const HIT_R = 22;
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0) continue;
+        if (p.hitIds.has(e.id)) continue;
+        const ep = posOf(w, e);
+        if (Math.hypot(ep.x - fx, ep.y - fy) <= HIT_R) {
+          p.hitIds.add(e.id);
+          applyDamage(w, e, p.dmg, p.opts);
+          spawnBurst(w, ep.x, ep.y, p.color, 4, false);
+        }
+      }
+      if (tt >= 1) p.dead = true;
+      continue;
+    }
+
     if (p.t < 1) continue;
 
     let hitX = p.toX, hitY = p.toY;
     let landed = false;
     let primaryEnemyId = null;
+    let primaryWasKilled = false;
 
     if (p.targetKind === 'enemy') {
       const target = w.enemies.find(e => e.id === p.targetId);
       if (target && !target.dead) {
         const ep = posOf(w, target);
         hitX = ep.x; hitY = ep.y;
-        landed = applyDamage(w, target, p.dmg, p);
+        const hpBefore = target.hp;
+        landed = applyDamage(w, target, p.dmg, p.opts);
         primaryEnemyId = target.id;
+        if (target.hp <= 0 && hpBefore > 0) primaryWasKilled = true;
       }
     } else if (p.targetKind === 'obstacle') {
       const ob = w.obstacles.find(o => o.id === p.targetId);
@@ -373,21 +730,21 @@ export function update(w, rawDt) {
         w.floats.push({ id: w.nextId++, x: hitX, y: hitY - 24, text: `-${Math.round(p.dmg)}`, color: '#E85A7A', t: 0 });
         landed = true;
         if (ob.hp <= 0) {
-          // Destroy + reward
           w.sugar += ob.reward;
           w.sugarEarned += ob.reward;
           w.obstacles = w.obstacles.filter(o => o.id !== ob.id);
           spawnBurst(w, hitX, hitY, '#A98467', 14, true);
           w.floats.push({ id: w.nextId++, x: hitX, y: hitY - 48, text: `+${ob.reward}`, color: '#F8E060', t: 0 });
-          if (w.focus && w.focus.kind === 'obstacle' && w.focus.id === ob.id) {
-            w.focus = null;
-          }
+          if (w.focus && w.focus.kind === 'obstacle' && w.focus.id === ob.id) w.focus = null;
           emit(w, 'obstacle_destroyed', { gx: ob.gx, gy: ob.gy, reward: ob.reward });
           play('coin');
         }
       }
     }
+    // 'aoe' means no primary target — splash only on land position
+    if (p.targetKind === 'aoe') landed = true;
 
+    // Splash
     if (p.splash) {
       const r = p.splash * T;
       for (const e of w.enemies) {
@@ -395,16 +752,28 @@ export function update(w, rawDt) {
         if (primaryEnemyId != null && e.id === primaryEnemyId) continue;
         const ep = posOf(w, e);
         const d = Math.hypot(ep.x - hitX, ep.y - hitY);
-        if (d <= r) applyDamage(w, e, p.dmg * 0.55, p);
+        if (d <= r) applyDamage(w, e, p.dmg * 0.55, p.opts);
       }
       spawnBurst(w, hitX, hitY, p.color, 10, true);
       play('splash');
-    } else {
+    } else if (p.targetKind !== 'aoe') {
       spawnBurst(w, hitX, hitY, p.color, 5, false);
       if (landed) play('hit');
     }
 
-    // Strawberry chain bounce — damage 2 nearest unhit enemies in range
+    // Cake's onKillSplash — fire a splash AOE if we just killed the target
+    if (p.onKillSplash && primaryWasKilled) {
+      const r = p.onKillSplash * T;
+      for (const e of w.enemies) {
+        if (e.dead || e.hp <= 0 || e.id === primaryEnemyId) continue;
+        const ep = posOf(w, e);
+        if (Math.hypot(ep.x - hitX, ep.y - hitY) <= r) applyDamage(w, e, p.dmg * 0.5, p.opts);
+      }
+      spawnBurst(w, hitX, hitY, '#F8E060', 16, true);
+      play('splash');
+    }
+
+    // Strawberry chain bounce
     if (p.chainBounce && primaryEnemyId != null) {
       const chainRangePx = 2.5 * T;
       const candidates = [];
@@ -420,16 +789,17 @@ export function update(w, rawDt) {
       for (let i = 0; i < Math.min(p.chainBounce, candidates.length); i++) {
         const { e } = candidates[i];
         const tp = posOf(w, e);
-        // Visual-only chain trail (no targetKind so hit logic ignores it)
         w.projectiles.push({
           id: w.nextId++,
-          fromX: prevX, fromY: prevY,
-          toX: tp.x, toY: tp.y,
+          fromX: prevX, fromY: prevY, toX: tp.x, toY: tp.y,
           targetId: -1, targetKind: 'visual',
-          t: 0, duration: 0.10,
-          color: p.color, size: 5, dmg: 0,
+          t: 0, duration: 0.10, color: p.color, size: 5, dmg: 0,
         });
-        applyDamage(w, e, chainDmg, p);
+        applyDamage(w, e, chainDmg, p.opts || {});
+        // Double tap on the same target
+        if (p.doubleTapChance && Math.random() < p.doubleTapChance) {
+          applyDamage(w, e, chainDmg * 0.6, p.opts || {});
+        }
         chainDmg *= 0.7;
         prevX = tp.x; prevY = tp.y;
       }
@@ -438,6 +808,35 @@ export function update(w, rawDt) {
   }
   w.projectiles = w.projectiles.filter(p => !p.dead);
 
+  // === Beam visuals ========================================================
+  if (w.beams && w.beams.length) {
+    for (const b of w.beams) b.t += dt;
+    w.beams = w.beams.filter(b => b.t < b.dur);
+  }
+
+  // === Shockwaves (icecream wave + banana charge release) ==================
+  if (w.shockwaves && w.shockwaves.length) {
+    for (const sw of w.shockwaves) {
+      sw.t += dt;
+      // Damage phase: while ring is expanding, hit any enemies the leading edge
+      // crosses (only once per wave per enemy).
+      if (sw.t < sw.dur && sw.dmg > 0) {
+        const r = sw.maxR * (sw.t / sw.dur);
+        for (const e of w.enemies) {
+          if (e.dead || e.hp <= 0) continue;
+          if (sw.hitIds.has(e.id)) continue;
+          const ep = posOf(w, e);
+          if (Math.hypot(ep.x - sw.x, ep.y - sw.y) <= r) {
+            sw.hitIds.add(e.id);
+            applyDamage(w, e, sw.dmg, { ...sw.opts, slow: sw.slow });
+          }
+        }
+      }
+    }
+    w.shockwaves = w.shockwaves.filter(sw => sw.t < sw.dur);
+  }
+
+  // === Kills, combos, splitter children ====================================
   for (const e of w.enemies) {
     if (e.hp <= 0 && !e.dead) {
       e.dead = true;
@@ -447,7 +846,6 @@ export function update(w, rawDt) {
         w.sugar += reward;
         w.sugarEarned += reward;
         w.enemiesKilled += 1;
-        // Combo: chained kills inside COMBO_TIMEOUT bump multiplier; score uses it.
         if (w.elapsed - w.lastKillAt <= COMBO_TIMEOUT) w.combo += 1;
         else w.combo = 1;
         w.lastKillAt = w.elapsed;
@@ -461,7 +859,6 @@ export function update(w, rawDt) {
         }
         emit(w, 'enemy_killed', { enemy_type: e.type, boss: !!def.boss, reward, combo: w.combo });
         play(def.boss ? 'killBoss' : 'kill');
-        // Splitter: spawn children at the same path position (and same path).
         if (def.splitter) {
           for (let i = 0; i < def.splitter.count; i++) {
             const offset = (i - (def.splitter.count - 1) / 2) * 12;
@@ -473,9 +870,8 @@ export function update(w, rawDt) {
   }
   w.enemies = w.enemies.filter(e => !e.dead);
 
-  for (const ob of w.obstacles) {
-    if (ob.flash > 0) ob.flash = Math.max(0, ob.flash - dt);
-  }
+  // === Decoration ticking ==================================================
+  for (const ob of w.obstacles) if (ob.flash > 0) ob.flash = Math.max(0, ob.flash - dt);
   for (const f of w.floats) f.t += dt;
   w.floats = w.floats.filter(f => f.t < 0.7);
   for (const fl of w.flashes) fl.t += dt;
@@ -483,9 +879,9 @@ export function update(w, rawDt) {
   for (const b of w.bursts) b.t += dt;
   w.bursts = w.bursts.filter(b => b.t < b.dur);
 
+  // === Wave transition =====================================================
   if (w.waveState === 'active' && w.spawnQueue.length === 0 && w.enemies.length === 0) {
     emit(w, 'wave_cleared', { wave: w.waveIdx + 1 });
-    // Endless: lazily generate the next wave so .waves never runs out.
     if (w.level.endless && w.waveIdx + 1 >= w.level.waves.length) {
       appendEndlessWave(w.level);
     }
@@ -504,8 +900,5 @@ export function update(w, rawDt) {
     }
   }
 
-  // Combo decays naturally when no kills for COMBO_TIMEOUT.
-  if (w.combo > 0 && w.elapsed - w.lastKillAt > COMBO_TIMEOUT) {
-    w.combo = 0;
-  }
+  if (w.combo > 0 && w.elapsed - w.lastKillAt > COMBO_TIMEOUT) w.combo = 0;
 }

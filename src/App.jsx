@@ -9,6 +9,7 @@ import Gameplay from './screens/Gameplay.jsx';
 import Victory from './screens/Victory.jsx';
 import Defeat from './screens/Defeat.jsx';
 import Bestiary from './screens/Bestiary.jsx';
+import TowerCodex from './screens/TowerCodex.jsx';
 import Achievements from './screens/Achievements.jsx';
 import { loadAchievementState, saveAchievementState, processEvents } from './game/achievements.js';
 
@@ -211,11 +212,15 @@ export default function App() {
     return <MainMenu
       onStart={() => setScreen('levels')}
       onBestiary={() => setScreen('bestiary')}
+      onTowerCodex={() => setScreen('towerCodex')}
       onAchievements={() => setScreen('achievements')}
       onEndless={startEndless}
       onDaily={startDaily}
       dailyStreak={dailyStreak}
     />;
+  }
+  if (screen === 'towerCodex') {
+    return <TowerCodex onBack={() => setScreen('menu')} />;
   }
   if (screen === 'achievements') {
     return <Achievements achState={loadAchievementState()} onBack={() => setScreen('menu')} />;
